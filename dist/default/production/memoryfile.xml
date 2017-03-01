@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project>
-  <executable name="dist/default/production/UNCANNY_1.0.0.X.production.hex">
+  <executable name="dist/default/production/uncanny.X.production.hex">
     <memory name="program">
       <units>bytes</units>
       <length>65536</length>
-      <used>14150</used>
-      <free>51386</free>
+      <used>13990</used>
+      <free>51546</free>
     </memory>
     <memory name="data">
       <units>bytes</units>
       <length>3968</length>
-      <used>262</used>
-      <free>3706</free>
+      <used>246</used>
+      <free>3722</free>
     </memory>
   </executable>
 </project>

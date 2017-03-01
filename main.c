@@ -15,8 +15,8 @@ void set_time(void);
 int dec_to_hex(int num);
 void date_time(void);
 void read_time(void);
-void bottle_count(void);
-void bottle_time(void);
+void can_count(void);
+void can_time(void);
 void standby(void);
 void operation(void);
 void operationend(void);
@@ -57,40 +57,30 @@ int stime;
 int etime;
 int operation_time;
 
-int can_count_disp = -1; //Data for bottle display screen
+int can_display_position = -1; //Data for can display screen
 int log_position = -1;
 int SOUP_LBL_count = 0;
-int SOUP_NOLBL_COUNT = 0;
+int SOUP_NOLBL_count = 0;
 int POPCAN_TAB_count = 0;
 int POPCAN_NOTAB_count = 0;
-int eskacaplbl_count = 0;
-int eskacap_count = 0;
-int eskalbl_count = 0;
-int eska_count = 0;
-int total_bottle_count = 0;
+int TOTAL_CAN_count = 0;
 
 int operation_disp = 0; //Data for operation running animation
 
 unsigned char keypress = NULL;
 
-//For queue       0 = YOP + CAP + LBL
-//                1 = YOP + CAP - LBL
-//                2 = YOP - CAP + LBL
-//                3 = YOP - CAP - LBL
-//                4 = ESKA + CAP + LBL
-//                5 = ESKA + CAP - LBL
-//                6 = ESKA - CAP + LBL
-//                7 = ESKA - CAP - LBL
-int bottlequeue[11];
-int bottlequeue_tail;
-int bottlequeue_head;
+//For queue       0 = SOUP_LBL
+//                1 = SOUP_NOLBL
+//                2 = POPCAN_TAB
+//                3 = POPCAN_NOTAB
+
+int canqueue[11];  // initialize array for 12 cans
+int canqueue_tail;
+int canqueue_head;
 int data, testdata;
 
-void main(void) {
-    
-    // <editor-fold defaultstate="collapsed" desc=" STARTUP SEQUENCE ">
-    
-    // Set internal oscillator to run at 8 MHZ
+void initialize(void){
+     // Set internal oscillator to run at 8 MHZ
     OSCCON = 0xF2; 
     // Enable PLL for the internal oscillator, Processor now runs at 32MHZ
     OSCTUNEbits.PLLEN = 1; 
@@ -154,9 +144,82 @@ void main(void) {
     PSA = 0;
     T0PS2 = 1;
     T0PS1 = 1;
-    T0PS0 = 1;  
+    T0PS0 = 1; 
+}
 
-    //</editor-fold>
+
+
+void main(void) {
+    initialize();
+//    // <editor-fold defaultstate="collapsed" desc=" STARTUP SEQUENCE ">
+//    
+//    // Set internal oscillator to run at 8 MHZ
+//    OSCCON = 0xF2; 
+//    // Enable PLL for the internal oscillator, Processor now runs at 32MHZ
+//    OSCTUNEbits.PLLEN = 1; 
+//    
+//    // TRIS register (Data Direction Register) 0 = output, 1 = input
+//    TRISA = 0b00001111; // RA0, RA1, RA2, RA3 as inputs
+//                        // RA0, RA1 - analog input for sensor
+//                        // RA4-7 - Stepper Motor
+//    
+//    //TRISB = 0b11110011;
+//    
+//    TRISB = 0b11111111; // RB1, RB4-7 as inputs
+//                        //RB2 LASER
+//                         // RB4-7 - Keypad data pins for the encoder PIC
+//                         // RB3 - CCP2 pin if CCP2MX is enabled in the configuration register - Servo motor 1
+//                         // RB1 - Keypad data available pin (active high)
+//    
+//    TRISC = 0x00; // RC0 - Timer1 oscillator output or Timer1/Timer3 clock input
+//                  // RC1 - Timer1 oscillator output
+//                  // RC2 - CCP1 pin: Servo motor 2
+//                  // RC3, RC4 - I2C pins for the RTC
+//    
+//    
+//                  // LATC0, LATC1,LATC2, SERVO
+//    
+//                  
+//    TRISD = 0x00; // All output mode for LCD, RD0 and RD1 unused
+//    TRISE = 0x00; // 
+//
+//
+//    ADCON0 = 0x00; // Disable ADC
+//    ADCON1 = 0xFF; // Set PORTB digital
+//    CVRCON = 0x00; // Disable CCP reference voltage output
+//    ADFM = 1; // Right justify A/D result
+//
+//    LATA = 0x00;
+//    LATB = 0x00; 
+//    LATC = 0x00;
+//    LATD = 0x00;
+//    LATE = 0x00;
+//    
+//    ADCON0 = 0x00;          //Disable ADC
+//    ADCON1 = 0xFF;          //Set PORTB to be digital instead of analog default  
+//    
+//    //ei();                   //Global Interrupt Mask
+//    GIE = 1;
+//    INT1IE = 1;             //Enable KP interrupts
+//    INT0IE = 0;             //Disable external interrupts
+//    INT2IE = 0;
+//    
+//    nRBPU = 0;
+//    
+//    initLCD();
+//    I2C_Master_Init(10000); //Initialize I2C Master with 100KHz clock
+//    
+//    
+//    //Set Timer Properties
+//    TMR0 = 0;
+//    T08BIT = 0;
+//    T0CS = 0;
+//    PSA = 0;
+//    T0PS2 = 1;
+//    T0PS1 = 1;
+//    T0PS0 = 1;  
+//
+//    //</editor-fold>
     
     curr_state = STANDBY;
     
@@ -174,14 +237,11 @@ void main(void) {
             case OPERATIONEND:
                 operationend();
                 break;
-//            case DATETIME:
-//                date_time();
-//                break;
             case CANCOUNT:
-                bottle_count();
+                can_count();
                 break;
             case CANTIME:
-                bottle_time();
+                can_time();
                 break;
             case LOGS:
                 display_log();
@@ -197,7 +257,7 @@ void interrupt isr(void){
     if (INT1IF) {
         switch(PORTB){
             case 239:   //KP_#
-                can_count_disp = -1;
+                can_display_position = -1;
                 log_position += 1;
                 printf("reached logs");
                 curr_state = LOGS;
@@ -214,24 +274,24 @@ void interrupt isr(void){
                 start_time[1] = time[1];
                 start_time[0] = time[0];
                 
-                bottlequeue_head = bottlequeue_tail = 0; //Initiate queue
+                canqueue_head = canqueue_tail = 0; //Initiate queue
                 
                 __lcd_clear();
-                can_count_disp = -1;
+                can_display_position = -1;
                 curr_state = OPERATION;
                 break;
             case 31:    //KP_2
-                can_count_disp += 1;
+                can_display_position += 1;
                 curr_state = CANCOUNT;
                 while(PORTB == 31){}
                 break;
             case 47:    //KP_3
                 operation_time = etime - stime;
-                can_count_disp = -1;
+                can_display_position = -1;
                 curr_state = CANTIME;
                 break;
             case 63:    //KP_A
-                can_count_disp = -1;
+                can_display_position = -1;
                 curr_state = STANDBY;
                 break;
             case 79:    //KP_4
@@ -247,7 +307,7 @@ void interrupt isr(void){
                 stime = 60*dec_to_hex(start_time[1])+dec_to_hex(start_time[0]);
                 etime = 60*dec_to_hex(end_time[1])+dec_to_hex(end_time[0]);
                 __lcd_clear();
-                can_count_disp = -1;
+                can_display_position = -1;
                 curr_state = OPERATIONEND;
                 break;
             case 207:   //KP_*
@@ -289,7 +349,7 @@ void interrupt isr(void){
                 case 1:
                     servo_rotate0(0);
                     servo_rotate2(0);
-                    SOUP_NOLBL_COUNT += 1;
+                    SOUP_NOLBL_count += 1;
                     break;
                 case 2:
                     servo_rotate0(0);
@@ -320,7 +380,7 @@ void interrupt isr(void){
         etime = 60*dec_to_hex(end_time[1])+dec_to_hex(end_time[0]);
         __lcd_clear();
         curr_state = OPERATIONEND;
-        can_count_disp = -1;
+        can_display_position = -1;
         TMR0IF = 0;
     }
     else{
@@ -356,13 +416,10 @@ void standby(void){
     __lcd_home();
 //    printf("%02x/%02x %02x:%02x:%02x", time[5],time[4],time[2],time[1],time[0]);    //Print date in YY/MM/DD
 //    __lcd_newline();
-    printf("A:Start #:Logs");    
+    printf("A:Start #:Logs  ");    
+
+    //DEBUGGING LINES
     
-    
-    //
-    //
-    //
-   
     __lcd_newline(); 
     printf("DEBUGPORTB: %d ", PORTB);
     return;
@@ -391,31 +448,6 @@ int dec_to_hex(int num) {                   //Convert decimal unsigned char to h
         i += 1;
     }
     return hexnum;
-}
-
-void date_time(void){
-    //Reset RTC memory pointer 
-    I2C_Master_Start(); //Start condition
-    I2C_Master_Write(0b11010000); //7 bit RTC address + Write
-    I2C_Master_Write(0x00); //Set memory pointer to seconds
-    I2C_Master_Stop(); //Stop condition
-
-    //Read Current Time
-    I2C_Master_Start();
-    I2C_Master_Write(0b11010001); //7 bit RTC address + Read
-    for(unsigned char i=0;i<0x06;i++){
-        time[i] = I2C_Master_Read(1);
-    }
-    time[6] = I2C_Master_Read(0);       //Final Read without ack
-    I2C_Master_Stop();
-
-    //LCD Display
-    __lcd_home();
-    printf("%02x/%02x/%02x      ", time[5],time[4],time[6]);    //Print date in MM/DD/YY
-    __lcd_newline();
-    printf("%02x:%02x:%02x      ", time[2],time[1],time[0]);    //HH:MM:SS
-
-    return;
 }
 
 void read_time(void){
@@ -449,19 +481,19 @@ void keycheck(void){
     return;
 }
 
-void bottle_count(void){
-    switch(can_count_disp % 3){
+void can_count(void){
+    switch(can_display_position % 3){
         case 0:
             __lcd_home();
             printf("Can Count       ");
             __lcd_newline();
-            printf("Total: %d       ", total_bottle_count);
+            printf("Total: %d       ", TOTAL_CAN_count);
             break;
         case 1:
             __lcd_home();
             printf("SOUP LBL: %d     ", SOUP_LBL_count);
             __lcd_newline();
-            printf("SOUP NOLBL: %d   ", SOUP_NOLBL_COUNT);
+            printf("SOUP NOLBL: %d   ", SOUP_NOLBL_count);
             break;
         case 2:
             __lcd_home();
@@ -473,7 +505,7 @@ void bottle_count(void){
         default:
             while(1){
                 __lcd_home();
-                printf("ERROR: %d", can_count_disp);
+                printf("ERROR: %d", can_display_position);
             }
             break;
     }
@@ -483,60 +515,80 @@ void bottle_count(void){
 void display_log(void){
     switch(log_position % 3){
         case 0:
+            
+            
+            //TODOS: REPLACE NUMBERS WITH %d
+            
             __lcd_home();
-            printf("Run#1    A:Next  ");
+            printf("Run #1           ");
             __lcd_newline();
-            printf("# of cans: 10    ");
+            printf("SOUP LBL:  4     ", SOUP_LBL_count);
+            keycheck();   
+            __lcd_home();
+            printf("Run #1           ");
+            __lcd_newline();
+            printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count);
             keycheck();
             __lcd_home();
-            printf("Run#1    A:Next  ");
+            printf("Run #1           ");
             __lcd_newline();
-            printf("# soda cans: 6   ");
-            keycheck();
-            __lcd_home();
-            printf("Run#1    A:Next  ");
-            __lcd_newline();
-            printf("# soup cans: 4   ");
+            printf("POPCAN TAB:  4   ", POPCAN_TAB_count);
             keycheck();  
-            break;
+            __lcd_home();
+            printf("Run #1           ");
+            __lcd_newline();
+            printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count);
+            keycheck();  
+            
+            log_position += 1;
             
             
         case 1:
             __lcd_home();
-            __lcd_clear();
-            printf("Run#2    A:Next  ");
+            printf("Run #2           ");
             __lcd_newline();
-            printf("# of cans: 10    ");
+            printf("SOUP LBL:  4     ", SOUP_LBL_count);
+            keycheck();   
+            __lcd_home();
+            printf("Run #2           ");
+            __lcd_newline();
+            printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count);
             keycheck();
-            __lcd_clear();
-            printf("Run#2    A:Next  ");
+            __lcd_home();
+            printf("Run #2           ");
             __lcd_newline();
-            printf("# soda cans: 6   ");
-            keycheck();
-            __lcd_clear();
-            printf("Run#2    A:Next  ");
-            __lcd_newline();
-            printf("# soup cans: 4   ");
+            printf("POPCAN TAB:  4   ", POPCAN_TAB_count);
             keycheck();  
-            break;
+            __lcd_home();
+            printf("Run #2           ");
+            __lcd_newline();
+            printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count);
+            keycheck();  
+            
+            log_position += 1;
         case 2:
             __lcd_home();
-            __lcd_clear();
-            printf("Run#3    A:Next  ");
+            printf("Run #3           ");
             __lcd_newline();
-            printf("# of cans: 10    ");
+            printf("SOUP LBL:  4     ", SOUP_LBL_count);
+            keycheck();   
+            __lcd_home();
+            printf("Run #3           ");
+            __lcd_newline();
+            printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count);
             keycheck();
-            __lcd_clear();
-            printf("Run#3    A:Next  ");
+            __lcd_home();
+            printf("Run #3           ");
             __lcd_newline();
-            printf("# soda cans: 6   ");
-            keycheck();
-            __lcd_clear();
-            printf("Run#3    A:Next  ");
-            __lcd_newline();
-            printf("# soup cans: 4   ");
+            printf("POPCAN TAB:  4   ", POPCAN_TAB_count);
             keycheck();  
-            break;
+            __lcd_home();
+            printf("Run #3           ");
+            __lcd_newline();
+            printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count);
+            keycheck();  
+            
+            log_position += 1;
         default:
             while(1){
                 __lcd_home();
@@ -547,7 +599,7 @@ void display_log(void){
     return;
 }
 
-void bottle_time(void){
+void can_time(void){
     __lcd_home();
     printf("Total Operation  ");
     __lcd_newline();

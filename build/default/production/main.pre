@@ -3918,8 +3918,8 @@ void set_time(void);
 int dec_to_hex(int num);
 void date_time(void);
 void read_time(void);
-void bottle_count(void);
-void bottle_time(void);
+void can_count(void);
+void can_time(void);
 void standby(void);
 void operation(void);
 void operationend(void);
@@ -3960,32 +3960,25 @@ int stime;
 int etime;
 int operation_time;
 
-int can_count_disp = -1;
+int can_display_position = -1;
 int log_position = -1;
 int SOUP_LBL_count = 0;
-int SOUP_NOLBL_COUNT = 0;
+int SOUP_NOLBL_count = 0;
 int POPCAN_TAB_count = 0;
 int POPCAN_NOTAB_count = 0;
-int eskacaplbl_count = 0;
-int eskacap_count = 0;
-int eskalbl_count = 0;
-int eska_count = 0;
-int total_bottle_count = 0;
+int TOTAL_CAN_count = 0;
 
 int operation_disp = 0;
 
 unsigned char keypress = (0);
 
-# 84
-int bottlequeue[11];
-int bottlequeue_tail;
-int bottlequeue_head;
+# 77
+int canqueue[11];
+int canqueue_tail;
+int canqueue_head;
 int data, testdata;
 
-void main(void) {
-
-
-
+void initialize(void){
 
 OSCCON = 0xF2;
 
@@ -3994,13 +3987,13 @@ OSCTUNEbits.PLLEN = 1;
 
 TRISA = 0b00001111;
 
-# 105
+# 95
 TRISB = 0b11111111;
 
-# 111
+# 101
 TRISC = 0x00;
 
-# 120
+# 110
 TRISD = 0x00;
 TRISE = 0x00;
 
@@ -4039,9 +4032,14 @@ PSA = 0;
 T0PS2 = 1;
 T0PS1 = 1;
 T0PS0 = 1;
+}
 
 
 
+void main(void) {
+initialize();
+
+# 224
 curr_state = STANDBY;
 
 while(1){
@@ -4058,14 +4056,11 @@ break;
 case OPERATIONEND:
 operationend();
 break;
-
-
-
 case CANCOUNT:
-bottle_count();
+can_count();
 break;
 case CANTIME:
-bottle_time();
+can_time();
 break;
 case LOGS:
 display_log();
@@ -4081,7 +4076,7 @@ void interrupt isr(void){
 if (INT1IF) {
 switch(PORTB){
 case 239:
-can_count_disp = -1;
+can_display_position = -1;
 log_position += 1;
 printf("reached logs");
 curr_state = LOGS;
@@ -4098,24 +4093,24 @@ read_time();
 start_time[1] = time[1];
 start_time[0] = time[0];
 
-bottlequeue_head = bottlequeue_tail = 0;
+canqueue_head = canqueue_tail = 0;
 
 lcdInst(0b00000001);
-can_count_disp = -1;
+can_display_position = -1;
 curr_state = OPERATION;
 break;
 case 31:
-can_count_disp += 1;
+can_display_position += 1;
 curr_state = CANCOUNT;
 while(PORTB == 31){}
 break;
 case 47:
 operation_time = etime - stime;
-can_count_disp = -1;
+can_display_position = -1;
 curr_state = CANTIME;
 break;
 case 63:
-can_count_disp = -1;
+can_display_position = -1;
 curr_state = STANDBY;
 break;
 case 79:
@@ -4131,7 +4126,7 @@ end_time[0] = time[0];
 stime = 60*dec_to_hex(start_time[1])+dec_to_hex(start_time[0]);
 etime = 60*dec_to_hex(end_time[1])+dec_to_hex(end_time[0]);
 lcdInst(0b00000001);
-can_count_disp = -1;
+can_display_position = -1;
 curr_state = OPERATIONEND;
 break;
 case 207:
@@ -4173,7 +4168,7 @@ break;
 case 1:
 servo_rotate0(0);
 servo_rotate2(0);
-SOUP_NOLBL_COUNT += 1;
+SOUP_NOLBL_count += 1;
 break;
 case 2:
 servo_rotate0(0);
@@ -4185,31 +4180,16 @@ servo_rotate0(0);
 servo_rotate2(120);
 POPCAN_NOTAB_count += 1;
 break;
-case 4:
-servo_rotate0(120);
-servo_rotate1(0);
-eskacaplbl_count += 1;
-break;
-case 5:
-servo_rotate0(120);
-servo_rotate1(0);
-eskacap_count += 1;
-break;
-case 6:
-servo_rotate0(120);
-servo_rotate1(120);
-eskalbl_count += 1;
-break;
-case 7:
-servo_rotate0(120);
-servo_rotate1(120);
-eska_count += 1;
-break;
+
 }
 }
 INT2IF = 0;
 }
 else if (TMR0IF){
+
+
+
+
 LATAbits.LATA2 = 0;
 TMR0ON = 0;
 read_time();
@@ -4219,7 +4199,7 @@ stime = 60*dec_to_hex(start_time[1])+dec_to_hex(start_time[0]);
 etime = 60*dec_to_hex(end_time[1])+dec_to_hex(end_time[0]);
 lcdInst(0b00000001);
 curr_state = OPERATIONEND;
-can_count_disp = -1;
+can_display_position = -1;
 TMR0IF = 0;
 }
 else{
@@ -4253,10 +4233,16 @@ I2C_Master_Stop();
 void standby(void){
 getRTC();
 lcdInst(0b10000000);
-printf("A:Start #:Logs", time[5],time[4],time[2],time[1],time[0]);
+
+
+printf("A:Start #:Logs  ");
+
+
+
 lcdInst(0b11000000);
 printf("DEBUGPORTB: %d ", PORTB);
 return;
+
 }
 
 void set_time(void){
@@ -4281,31 +4267,6 @@ quotient = quotient / 16;
 i += 1;
 }
 return hexnum;
-}
-
-void date_time(void){
-
-I2C_Master_Start();
-I2C_Master_Write(0b11010000);
-I2C_Master_Write(0x00);
-I2C_Master_Stop();
-
-
-I2C_Master_Start();
-I2C_Master_Write(0b11010001);
-for(unsigned char i=0;i<0x06;i++){
-time[i] = I2C_Master_Read(1);
-}
-time[6] = I2C_Master_Read(0);
-I2C_Master_Stop();
-
-
-lcdInst(0b10000000);
-printf("%02x/%02x/%02x      ", time[5],time[4],time[6]);
-lcdInst(0b11000000);
-printf("%02x:%02x:%02x      ", time[2],time[1],time[0]);
-
-return;
 }
 
 void read_time(void){
@@ -4339,19 +4300,19 @@ __nop();
 return;
 }
 
-void bottle_count(void){
-switch(can_count_disp % 3){
+void can_count(void){
+switch(can_display_position % 3){
 case 0:
 lcdInst(0b10000000);
 printf("Can Count       ");
 lcdInst(0b11000000);
-printf("Total: %d       ", total_bottle_count);
+printf("Total: %d       ", TOTAL_CAN_count);
 break;
 case 1:
 lcdInst(0b10000000);
 printf("SOUP LBL: %d     ", SOUP_LBL_count);
 lcdInst(0b11000000);
-printf("SOUP NOLBL: %d   ", SOUP_NOLBL_COUNT);
+printf("SOUP NOLBL: %d   ", SOUP_NOLBL_count);
 break;
 case 2:
 lcdInst(0b10000000);
@@ -4363,7 +4324,7 @@ break;
 default:
 while(1){
 lcdInst(0b10000000);
-printf("ERROR: %d", can_count_disp);
+printf("ERROR: %d", can_display_position);
 }
 break;
 }
@@ -4373,60 +4334,80 @@ return;
 void display_log(void){
 switch(log_position % 3){
 case 0:
+
+
+
+
 lcdInst(0b10000000);
-printf("Run#1    A:Next  ");
+printf("Run #1           ");
 lcdInst(0b11000000);
-printf("# of cans: 10    ");
+printf("SOUP LBL:  4     ", SOUP_LBL_count);
 keycheck();
 lcdInst(0b10000000);
-printf("Run#1    A:Next  ");
+printf("Run #1           ");
 lcdInst(0b11000000);
-printf("# soda cans: 6   ");
+printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count);
 keycheck();
 lcdInst(0b10000000);
-printf("Run#1    A:Next  ");
+printf("Run #1           ");
 lcdInst(0b11000000);
-printf("# soup cans: 4   ");
+printf("POPCAN TAB:  4   ", POPCAN_TAB_count);
 keycheck();
-break;
+lcdInst(0b10000000);
+printf("Run #1           ");
+lcdInst(0b11000000);
+printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count);
+keycheck();
+
+log_position += 1;
 
 
 case 1:
 lcdInst(0b10000000);
-lcdInst(0b00000001);
-printf("Run#2    A:Next  ");
+printf("Run #2           ");
 lcdInst(0b11000000);
-printf("# of cans: 10    ");
+printf("SOUP LBL:  4     ", SOUP_LBL_count);
 keycheck();
-lcdInst(0b00000001);
-printf("Run#2    A:Next  ");
+lcdInst(0b10000000);
+printf("Run #2           ");
 lcdInst(0b11000000);
-printf("# soda cans: 6   ");
+printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count);
 keycheck();
-lcdInst(0b00000001);
-printf("Run#2    A:Next  ");
+lcdInst(0b10000000);
+printf("Run #2           ");
 lcdInst(0b11000000);
-printf("# soup cans: 4   ");
+printf("POPCAN TAB:  4   ", POPCAN_TAB_count);
 keycheck();
-break;
+lcdInst(0b10000000);
+printf("Run #2           ");
+lcdInst(0b11000000);
+printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count);
+keycheck();
+
+log_position += 1;
 case 2:
 lcdInst(0b10000000);
-lcdInst(0b00000001);
-printf("Run#3    A:Next  ");
+printf("Run #3           ");
 lcdInst(0b11000000);
-printf("# of cans: 10    ");
+printf("SOUP LBL:  4     ", SOUP_LBL_count);
 keycheck();
-lcdInst(0b00000001);
-printf("Run#3    A:Next  ");
+lcdInst(0b10000000);
+printf("Run #3           ");
 lcdInst(0b11000000);
-printf("# soda cans: 6   ");
+printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count);
 keycheck();
-lcdInst(0b00000001);
-printf("Run#3    A:Next  ");
+lcdInst(0b10000000);
+printf("Run #3           ");
 lcdInst(0b11000000);
-printf("# soup cans: 4   ");
+printf("POPCAN TAB:  4   ", POPCAN_TAB_count);
 keycheck();
-break;
+lcdInst(0b10000000);
+printf("Run #3           ");
+lcdInst(0b11000000);
+printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count);
+keycheck();
+
+log_position += 1;
 default:
 while(1){
 lcdInst(0b10000000);
@@ -4437,7 +4418,7 @@ break;
 return;
 }
 
-void bottle_time(void){
+void can_time(void){
 lcdInst(0b10000000);
 printf("Total Operation  ");
 lcdInst(0b11000000);
