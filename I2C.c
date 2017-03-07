@@ -32,11 +32,11 @@ void I2C_Master_Start()
   SEN = 1;
 }
 
-void I2C_Master_RepeatedStart()
-{
-  I2C_Master_Wait();
-  RSEN = 1;
-}
+//void I2C_Master_RepeatedStart()
+//{
+//  I2C_Master_Wait();
+//  RSEN = 1;
+//}
 
 void I2C_Master_Stop()
 {
@@ -48,14 +48,6 @@ void I2C_Master_Write(unsigned d)
 {
   I2C_Master_Wait();
   SSPBUF = d;
-}
-
-void I2C_ColorSens_Init(void){
-    I2C_Master_Start();             //Write Start condition
-    I2C_Master_Write(0b01010010);   //7bit address for TCS (0x29) + Write
-    I2C_Master_Write(0b10000000);   //Write to cmdreg + access enable reg
-    I2C_Master_Write(0b00000011);   //Start RGBC and POWER 
-    I2C_Master_Stop();
 }
 
 unsigned char I2C_Master_Read(unsigned char a)
@@ -71,8 +63,8 @@ unsigned char I2C_Master_Read(unsigned char a)
   return temp;
 }
 
-void delay_10ms(unsigned char n) { 
-    while (n-- != 0) { 
-        __delay_ms(5); 
-    } 
-}
+//void delay_10ms(unsigned char n) { 
+//    while (n-- != 0) { 
+//        __delay_ms(5); 
+//    } 
+//}

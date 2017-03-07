@@ -3757,12 +3757,7 @@ I2C_Master_Wait();
 SEN = 1;
 }
 
-void I2C_Master_RepeatedStart()
-{
-I2C_Master_Wait();
-RSEN = 1;
-}
-
+# 41
 void I2C_Master_Stop()
 {
 I2C_Master_Wait();
@@ -3773,14 +3768,6 @@ void I2C_Master_Write(unsigned d)
 {
 I2C_Master_Wait();
 SSPBUF = d;
-}
-
-void I2C_ColorSens_Init(void){
-I2C_Master_Start();
-I2C_Master_Write(0b01010010);
-I2C_Master_Write(0b10000000);
-I2C_Master_Write(0b00000011);
-I2C_Master_Stop();
 }
 
 unsigned char I2C_Master_Read(unsigned char a)
@@ -3796,8 +3783,3 @@ ACKEN = 1;
 return temp;
 }
 
-void delay_10ms(unsigned char n) {
-while (n-- != 0) {
-_delay((unsigned long)((5)*(10000000/4000.0)));
-}
-}

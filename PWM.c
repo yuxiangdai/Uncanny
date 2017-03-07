@@ -1,10 +1,5 @@
-/*
- * File:   pwm.c
- * Author: Michael Ding
- *
- * Created on July 14, 2016, 10:25 AM
- */
 
+// PIC18_PWM Sample Code
 
 #include <xc.h>
 //#include <./delay_100ms.h>
