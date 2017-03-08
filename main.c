@@ -335,20 +335,28 @@ void servo_rotate0(int degree){
     
     //1.255 is average
 
-    for (i=0; i<80; i++) {
-        LATCbits.LATC0 = 1;
-        
-        __delay_ms(1.5);
-        LATCbits.LATC0 = 0;
-        __delay_ms(18.5);
+    INT1IF = 0;
+    while(!INT1IF){
+        for (i=0; i<50; i++) {
+
+            LATCbits.LATC0 = 1;
+
+            __delay_ms(1.5);
+            LATCbits.LATC0 = 0;
+            __delay_ms(18.5);
+
+        }
+        for (i=0; i<50; i++) {
+
+            LATCbits.LATC0 = 1;
+            __delay_ms(1);
+            LATCbits.LATC0 = 0;
+            __delay_ms(19);
+
+        }
     }
     
-     for (i=0; i<80; i++) {
-        LATCbits.LATC0 = 1;
-        __delay_ms(1);
-        LATCbits.LATC0 = 0;
-        __delay_ms(19);
-    }
+    
     
 }
 
@@ -391,7 +399,7 @@ void servo_rotate0_0deg(void){
         LATCbits.LATC0 = 0;
         __delay_ms(19);
     }
-    
+    return;
 }
 
 
@@ -511,15 +519,15 @@ void interrupt isr(void){
             case 127:   //KP_B
                 
 //                curr_state = OPERATION;
-//                servo_rotate1(90);
+                servo_rotate0(90);
 //                curr_state = SERVO;
 
 //                servo_rotate0(1);
 //                rotateServo();
                 break;
             case 191:   //KP_C
-//                stepper_rotate();
-                servo_rotate0_0deg();
+                stepper_rotate();
+                //servo_rotate0_0deg();
 //                read_ADC();
 //                servo_rotate0(2);
                 break;
@@ -828,37 +836,70 @@ void can_time(void){
 }
 
 void operation(void){
-    switch(operation_disp){
-        case 0:
-            __lcd_home();
-            printf("Running.              ");
-            operation_disp = 1;
-            break;
-        case 1:
-            __lcd_home();
-            printf("Running..              ");
-            operation_disp = 2;
-            break;
-        case 2:
-            __lcd_home();
-            printf("Running...              ");
-            operation_disp = 3;
-            break;
-        case 3:
-            __lcd_home();
-            printf("Running...              ");
-            operation_disp = 4;
-            break;
-        case 4:
-            __lcd_home();
-            printf("Running...              ");
-            operation_disp = 0;
-            break;
+                __lcd_home();
+            printf("Running..              ");  
+            __lcd_newline();
+            printf("PRESS 4 TO STOP  ");
+    int i;
+    INT1IF = 0;
+    while(!INT1IF){
+        for (i=0; i<50; i++) {
+
+ 
+            LATCbits.LATC0 = 1;
+            __delay_ms(1.5);
+            LATCbits.LATC0 = 0;
+            __delay_ms(18.5);
+         
+        }
+        
+        
+        for (i=0; i<50; i++) {
+//            __lcd_home();
+//            printf("Running..              ");  
+//            __lcd_newline();
+//            printf("PRESS 4 TO STOP  ");
+            
+            LATCbits.LATC0 = 1;
+            __delay_ms(1);
+            LATCbits.LATC0 = 0;
+            __delay_ms(19);
+
+        }
     }
+//          switch(operation_disp){
+//                case 0:
+//                    __lcd_home();
+//                    printf("Running.              ");
+//                    operation_disp = 1;
+//                    break;
+//                case 1:
+//                    __lcd_home();
+//                    printf("Running..              ");
+//                    operation_disp = 2;
+//                    break;
+//                case 2:
+//                    __lcd_home();
+//                    printf("Running...              ");
+//                    operation_disp = 3;
+//                    break;
+//                case 3:
+//                    __lcd_home();
+//                    printf("Running...              ");
+//                    operation_disp = 4;
+//                    break;
+//                case 4:
+//                    __lcd_home();
+//                    printf("Running...              ");
+//                    operation_disp = 0;
+//                    break;
+//            }
+//
+//            __lcd_newline();
+//            read_sensor();
+//            printf("PRESS 4 TO STOP  ");
+//    
     
-    __lcd_newline();
-    read_sensor();
-    printf("PRESS 4 TO STOP  ");
     return;
 }
 
@@ -1061,34 +1102,34 @@ int stepper_state;
 void stepper_rotate(void){
     unsigned int i;
     unsigned int j;
-    int duty = 1500;
+    unsigned long duty = 500;
 
     for (i=0; i<180; i++) {
         STEPPER_LAT1 = 1;
+        STEPPER_LAT2 = 0;
+        STEPPER_LAT3 = 0;
+        STEPPER_LAT4 = 0;
+        
+        __delay_ms(10);
+        
+        STEPPER_LAT1 = 0;
         STEPPER_LAT2 = 1;
         STEPPER_LAT3 = 0;
         STEPPER_LAT4 = 0;
         
-        __delay_ms(500);
-        
-        STEPPER_LAT1 = 0;
-        STEPPER_LAT2 = 1;
-        STEPPER_LAT3 = 1;
-        STEPPER_LAT4 = 0;
-        
-        __delay_ms(500);
+        __delay_ms(10);
         
         STEPPER_LAT1 = 0;
         STEPPER_LAT2 = 0;
         STEPPER_LAT3 = 1;
-        STEPPER_LAT4 = 1;
-        __delay_ms(500);
+        STEPPER_LAT4 = 0;
+        __delay_ms(10);
         
-        STEPPER_LAT1 = 1;
+        STEPPER_LAT1 = 0;
         STEPPER_LAT2 = 0;
         STEPPER_LAT3 = 0;
         STEPPER_LAT4 = 1;
-        __delay_ms(500);
+        __delay_ms(10);
         
     }
     
