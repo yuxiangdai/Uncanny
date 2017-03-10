@@ -11,8 +11,6 @@
 #include "functions.h"
 #include "main.h"
 //
-//void readADC(char channel);
-void read_ADC(void);
 //
 // servo macros and duty cycles
 #define SERVO_UPSCALE 1.25
@@ -29,11 +27,13 @@ void read_ADC(void);
 //void stepper_ISR(void);
 //void stepper_delay(void);
 
+void solenoid_push(void);
+
 void stepper_rotate(void);
 
 void stepper_delay(void);
 
-void servo_rotate0_0deg(void);
+void servo_rotate_RC0(int degree);
 
 void update_servo_position(float);
 
@@ -56,7 +56,9 @@ void servo_rotate0(int degree);
 void servo_rotate1(int degree);
 void servo_rotate2(int degree);
 
-// 
+
+void readADC(char channel);
+
 
 void display_log(void);
 void read_sensor(void);
@@ -86,6 +88,8 @@ enum state curr_state;
 volatile unsigned char servo_current_state;
 volatile float servo_up_period;
 volatile float servo_down_period;
+
+void ADC_display(void);
 
 unsigned char time[7];
 unsigned char start_time[2];
@@ -127,11 +131,11 @@ void initialize(void){
     OSCTUNEbits.PLLEN = 1; 
     
     // TRIS register (Data Direction Register) 0 = output, 1 = input
-    TRISA = 0b00000000; // RA0, RA1, RA2, RA3 as outputs
+    TRISA = 0b00100000; // RA0, RA1, RA2, RA3 as outputs
     //RA0-3
-                        
-                        // RA2 - DC Motor
-                        // RA4-7 - Stepper Motor
+                        // RA3 - ADCON
+                        // RA5 - Sensor
+                        // RA0-3 - Stepper Motor
     
     //TRISB = 0b11110011;
     
@@ -168,6 +172,12 @@ void initialize(void){
     
     ADCON0 = 0x00;          //Disable ADC
     ADCON1 = 0xFF;          //Set PORTB to be digital instead of analog default  
+    
+    ADCON0 = 0x00;  //Disable ADC
+    ADCON1 = 0x0B;  //AN0 to AN3 used as analog input
+    CVRCON = 0x00; // Disable CCP reference voltage output
+    CMCONbits.CIS = 0;
+    ADFM = 1;
     
     //ei();                   //Global Interrupt Mask
     GIE = 1;
@@ -277,6 +287,17 @@ void initialize(void){
 
 }
 
+
+void readADC(char channel){
+    // Select A2D channel to read
+    ADCON0 = ((channel <<2));
+    ADON = 1;
+    ADCON0bits.GO = 1;
+   while(ADCON0bits.GO_NOT_DONE){__delay_ms(5);}
+    
+    
+}
+
 void main(void) {
 //    set_time();
     initialize();
@@ -321,6 +342,35 @@ void main(void) {
     
     return;
 }
+
+void ADC_display(void){
+    while(1) {
+       readADC(3);
+       __lcd_home();
+       printf("%x+%x", ADRESH*256,ADRESL);
+       printf("   ");
+       if (ADRESH*256 > 299){
+           servo_rotate_RC0(90);
+       } else {
+           servo_rotate_RC0(0);
+       }
+       
+//       
+//       
+//       analog_reading= ADRESL + (ADRESH *256);
+//       printf(analog_reading); 
+       
+       
+       readADC(2);
+       printf("%x %x", ADRESH*256,ADRESL);
+       
+       
+       printf("    ");
+       __delay_1s();
+    }
+}
+
+// <editor-fold defaultstate="collapsed" desc="Servo config">
 
 void servo_rotate0(int degree){
     
@@ -383,27 +433,49 @@ void servo_rotate1(int degree){
 }
 
 
-void servo_rotate0_0deg(void){
+void servo_rotate_RC0(int degree){
     
 //    65535-(int)((float)time*2000/256)
     
-    unsigned int i;
-    unsigned int j;
-//     duty = ((degree+90)*5/90)+10;
-    int duty = 1000;
-    
-    
-    for (i=0; i<80; i++) {
-        LATCbits.LATC0 = 1;
-        __delay_ms(1);
-        LATCbits.LATC0 = 0;
-        __delay_ms(19);
-    }
+    switch(degree) {
+        case 90:
+            for (int i=0; i<80; i++) {
+                LATCbits.LATC0 = 1;
+                __delay_ms(1);
+                LATCbits.LATC0 = 0;
+                __delay_ms(19);
+            }
+            break;
+        case 0:
+            for (int i=0; i<80; i++) {
+                LATCbits.LATC0 = 1;
+                __delay_ms(1.5);
+                LATCbits.LATC0 = 0;
+                __delay_ms(18.5);
+            }
+            break;
+    }   
     return;
 }
+ // </editor-fold>
 
+void solenoid_push(void){
+    int i;
+    
+    while(1){
+        LATAbits.LATA5 = 1;
+        for (i=0; i<1000; i++) {   
+                 __delay_ms(1);
+            }
+           
 
-
+        LATAbits.LATA5 = 0;
+     
+        for (i=0; i<1000; i++) {
+            __delay_ms(1);
+        }
+    }
+}
 
 void delay_10ms(unsigned char n) { 
          while (n-- != 0) { 
@@ -411,32 +483,8 @@ void delay_10ms(unsigned char n) {
          } 
      }
 
-
-//void rotateServo(void) {
-//    unsigned int i;
-//    __lcd_home();
-//    
-//    do{
-//        LATCbits.LATC0 = 1;
-//        //1.5 ms on 
-//        for(i=0;i<150;i++){__delay_us(10);}
-//        
-//        
-//        LATCbits.LATC0 = 0;
-//
-//        //20ms off
-//        for(i=0;i<1750;i++){__delay_us(10);}
-//    }while(1);
-//    
-//    return;
-//}
-
-
-
-
 void interrupt isr(void){
     if (INT1IF){  
-        
 //        if(currstate == UI_state) { // "If we're supposed to be in the UI..."
 //            input = keys[(PORTB & 0xF0) >> 4];
 //            
@@ -526,7 +574,8 @@ void interrupt isr(void){
 //                rotateServo();
                 break;
             case 191:   //KP_C
-                stepper_rotate();
+//                stepper_rotate();
+                ADC_display();
                 //servo_rotate0_0deg();
 //                read_ADC();
 //                servo_rotate0(2);
@@ -552,7 +601,7 @@ void interrupt isr(void){
 //    }
     else if (INT0IF){   //Interrupt for first sensor at RB0
         if(PORTAbits.RA0){
-            read_sensor();
+            ADC_display();
             
             __delay_ms(150);
         }
@@ -944,16 +993,6 @@ void read_sensor(void){
 
 
 
-void readADC(char channel){
-    // Select A2D channel to read
-    ADCON0 = ((channel <<2));
-    ADON = 1;
-    ADCON0bits.GO = 1;
-   while(ADCON0bits.GO_NOT_DONE){__delay_ms(5);}
-    
-    
-   
-}
 
 
 
@@ -1266,4 +1305,3 @@ void stepper_rotate(void){
 //        rotary_angle_count = rotary_angle_count == ROTARY_STEPPER_COUNT+1 ? 0 : rotary_angle_count+1;
 //    }
     
-     
