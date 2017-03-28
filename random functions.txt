@@ -1,0 +1,20 @@
+
+
+KEYPAD 4
+
+            case 79:    //KP_4
+//                LATAbits.LATA2 = 0; //Stop motor
+//                INT0IE = 0;         //Disable external interrupts
+//                INT2IE = 0;
+//                TMR0IE = 0;         //Disable timer
+//                TMR0ON = 0;
+//                
+//                read_time();
+//                end_time[1] = time[1];
+//                end_time[0] = time[0];
+//                stime = 60*dec_to_hex(start_time[1])+dec_to_hex(start_time[0]);
+//                etime = 60*dec_to_hex(end_time[1])+dec_to_hex(end_time[0]);
+//                __lcd_clear();
+//                can_display_position = -1;
+                curr_state = OPERATIONEND;
+                break;

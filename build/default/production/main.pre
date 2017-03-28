@@ -3913,14 +3913,23 @@ void ___delay_1s(unsigned char n);
 void PWM1(int duty);
 void PWM1off();
 
-# 30 "main.c"
+# 27 "main.c"
+void FINALoperation(void);
+void LightSensorRA5_Pop(void);
+void LightSensorRA4_Soup(void);
+
+
+
 void solenoid_push(void);
 
 void stepper_rotate(void);
 
 void stepper_delay(void);
 
+void DC_motor_RA(int pin);
+
 void servo_rotate_RC0(int degree);
+void servo_rotate_RC1(int degree);
 
 void update_servo_position(float);
 
@@ -3942,11 +3951,13 @@ void emergencystop(void);
 void servo_rotate0(int degree);
 void servo_rotate1(int degree);
 void servo_rotate2(int degree);
-
+void keyPressed(void);
 
 void readADC(char channel);
+void ADC_RA3(void);
 
 
+int run_number;
 void display_log(void);
 void read_sensor(void);
 
@@ -3967,7 +3978,7 @@ OPERATIONEND,
 CANCOUNT,
 CANTIME,
 LOGS,
-SERVO
+TEST
 };
 
 enum state curr_state;
@@ -3976,7 +3987,7 @@ volatile unsigned char servo_current_state;
 volatile float servo_up_period;
 volatile float servo_down_period;
 
-void ADC_display(void);
+void DCforwardPWM(void);
 
 unsigned char time[7];
 unsigned char start_time[2];
@@ -3987,25 +3998,32 @@ int operation_time;
 
 int can_display_position = -1;
 int log_position = -1;
-int SOUP_LBL_count = 0;
-int SOUP_NOLBL_count = 0;
-int POPCAN_TAB_count = 0;
-int POPCAN_NOTAB_count = 0;
-int TOTAL_CAN_count = 0;
+int SOUP_LBL_count[4] = {0,0,0, 0};
+int SOUP_NOLBL_count[4] = {0,0,0, 0};
+int POPCAN_TAB_count[4] = {0,0,0, 0};
+int POPCAN_NOTAB_count[4] = {0,0,0, 0};
+int TOTAL_CAN_count[4] = {0,0,0,0};
+
+int degree = 0;
 
 int high = 0;
+int DC_motor_direction = 0;
 
-int LoggedTimes[4] = {1,2,3, 4};
+unsigned char curr_time[3];
+
+int LoggedTimes[4] = {0,0,0, 0};
+int TempTimes[4] = {0,0,0, 0};
 
 int operation_disp = 0;
 
 unsigned char keypress = (0);
 
-# 122
+# 138
 int canqueue[11];
 int canqueue_tail;
 int canqueue_head;
 int data, testdata;
+int moved = 1;
 
 void initialize(void){
 
@@ -4013,16 +4031,16 @@ OSCCON = 0xF2;
 
 OSCTUNEbits.PLLEN = 1;
 
+# 154
+TRISA = 0b00111100;
 
-TRISA = 0b00100000;
-
-# 142
+# 168
 TRISB = 0b11111111;
 
-# 148
+# 174
 TRISC = 0x00;
 
-# 156
+# 182
 TRISD = 0x00;
 
 
@@ -4087,7 +4105,7 @@ TMR0ON=0;
 TMR0IE=0;
 TMR0IF=0;
 
-# 226
+# 252
 T0PS0=1;
 T0PS1=1;
 T0PS2=1;
@@ -4117,7 +4135,7 @@ TMR1ON=0;
 TMR1IE = 0;
 TMR1IF=0;
 
-# 261
+# 287
 T2CON = 0b01111010;
 
 PR2 = 0b10011100;
@@ -4177,7 +4195,6 @@ case EMERGENCYSTOP:
 emergencystop();
 break;
 case OPERATION:
-
 operation();
 break;
 case OPERATIONEND:
@@ -4192,10 +4209,6 @@ break;
 case LOGS:
 display_log();
 break;
-case SERVO:
-
-break;
-
 }
 _delay((unsigned long)((200)*(10000000/4000.0)));
 }
@@ -4203,20 +4216,113 @@ _delay((unsigned long)((200)*(10000000/4000.0)));
 return;
 }
 
-void ADC_display(void){
-while(1) {
-readADC(3);
-lcdInst(0b10000000);
-printf("%x+%x", ADRESH*256,ADRESL);
-printf("   ");
-if (ADRESH*256 > 299){
+
+
+void FINALoperation(void){
+LATAbits.LATA6 = 1;
 servo_rotate_RC0(90);
+servo_rotate_RC1(90);
+
+if(PORTAbits.RA4 ){
+
+
+LATAbits.LATA1 = 0;
+readADC(2);
+
+if (ADRESH*256 > 299){
+servo_rotate_RC1(180);
+
 } else {
-servo_rotate_RC0(0);
+servo_rotate_RC1(0);
+}
+servo_rotate_RC1(90);
+
+} else {
+LATAbits.LATA1 = 1;
+_delay((unsigned long)((500)*(10000000/4000.0)));
+LATAbits.LATA1 = 0;
+_delay((unsigned long)((1000)*(10000000/4000.0)));
 }
 
-# 364
+}
+
+void LightSensorRA4_Soup(void){
+LATAbits.LATA6 = 1;
+servo_rotate_RC0(90);
+servo_rotate_RC1(90);
+run_number = 0;
+SOUP_NOLBL_count[run_number] = 0;
+POPCAN_TAB_count[run_number] = 0;
+POPCAN_NOTAB_count[run_number] = 0;
+TOTAL_CAN_count[run_number] = 0;
+
+if(PORTAbits.RA4 ){
+
+
+LATAbits.LATA1 = 0;
 readADC(2);
+
+if (ADRESH*256 > 299){
+servo_rotate_RC1(180);
+SOUP_LBL_count[run_number] += 1;
+} else {
+servo_rotate_RC1(0);
+SOUP_NOLBL_count[run_number] += 1;
+}
+servo_rotate_RC1(90);
+
+} else {
+LATAbits.LATA1 = 1;
+_delay((unsigned long)((500)*(10000000/4000.0)));
+LATAbits.LATA1 = 0;
+_delay((unsigned long)((1000)*(10000000/4000.0)));
+}
+
+# 451
+}
+
+
+void LightSensorRA5_Pop(void){
+while(1){
+if(PORTAbits.RA5 ){
+LATAbits.LATA1 = 0;
+} else {
+LATAbits.LATA1 = 1;
+_delay((unsigned long)((500)*(10000000/4000.0)));
+LATAbits.LATA1 = 0;
+_delay((unsigned long)((1000)*(10000000/4000.0)));
+
+
+if(PORTAbits.RA5){
+servo_rotate_RC0(0);
+servo_rotate_RC0(90);
+}
+
+# 478
+}
+}
+}
+
+
+
+
+void ADC_RA3(void){
+while(1) {
+readADC(2);
+lcdInst(0b10000000);
+printf("%x+%x", ADRESH*256,ADRESL);
+printf(" AND ");
+
+if (ADRESH*256 > 299){
+servo_rotate_RC1(180);
+} else {
+servo_rotate_RC1(0);
+}
+
+servo_rotate_RC1(90);
+
+# 506
+readADC(3);
 printf("%x %x", ADRESH*256,ADRESL);
 
 
@@ -4224,6 +4330,7 @@ printf("    ");
 for(char i=0;i<100;i++){_delay((unsigned long)((10)*(10000000/4000.0)));};
 }
 }
+
 
 
 
@@ -4259,6 +4366,15 @@ LATCbits.LATC0 = 0;
 _delay((unsigned long)((19)*(10000000/4000.0)));
 
 }
+
+for (i=0; i<50; i++) {
+
+LATCbits.LATC0 = 1;
+_delay((unsigned long)((2)*(10000000/4000.0)));
+LATCbits.LATC0 = 0;
+_delay((unsigned long)((18)*(10000000/4000.0)));
+
+}
 }
 
 
@@ -4287,28 +4403,69 @@ _delay((unsigned long)((19)*(10000000/4000.0)));
 return;
 }
 
-
 void servo_rotate_RC0(int degree){
 
-
-
 switch(degree) {
-case 90:
-for (int i=0; i<80; i++) {
+case 0:
+
+for (int i=0; i<70; i++) {
 LATCbits.LATC0 = 1;
-_delay((unsigned long)((1)*(10000000/4000.0)));
+_delay((unsigned long)((0.7)*(10000000/4000.0)));
 LATCbits.LATC0 = 0;
+_delay((unsigned long)((19.3)*(10000000/4000.0)));
+}
+break;
+case 90:
+for (int i=0; i<70; i++) {
+LATCbits.LATC0 = 1;
+_delay((unsigned long)((1.2)*(10000000/4000.0)));
+LATCbits.LATC0 = 0;
+_delay((unsigned long)((18.8)*(10000000/4000.0)));
+}
+break;
+case 180:
+
+for (int i=0; i<70; i++) {
+LATCbits.LATC0 = 1;
+_delay((unsigned long)((1.6)*(10000000/4000.0)));
+LATCbits.LATC0 = 0;
+_delay((unsigned long)((18.4)*(10000000/4000.0)));
+}
+break;
+
+}
+return;
+}
+
+void servo_rotate_RC1(int degree){
+switch(degree) {
+case 0:
+
+for (int i=0; i<70; i++) {
+LATCbits.LATC1 = 1;
+_delay((unsigned long)((0.5)*(10000000/4000.0)));
+LATCbits.LATC1 = 0;
+_delay((unsigned long)((19.5)*(10000000/4000.0)));
+}
+break;
+case 90:
+for (int i=0; i<70; i++) {
+LATCbits.LATC1 = 1;
+_delay((unsigned long)((1)*(10000000/4000.0)));
+LATCbits.LATC1 = 0;
 _delay((unsigned long)((19)*(10000000/4000.0)));
 }
 break;
-case 0:
-for (int i=0; i<80; i++) {
-LATCbits.LATC0 = 1;
+case 180:
+
+for (int i=0; i<70; i++) {
+LATCbits.LATC1 = 1;
 _delay((unsigned long)((1.5)*(10000000/4000.0)));
-LATCbits.LATC0 = 0;
+LATCbits.LATC1 = 0;
 _delay((unsigned long)((18.5)*(10000000/4000.0)));
 }
 break;
+
 }
 return;
 }
@@ -4341,7 +4498,7 @@ _delay((unsigned long)((10)*(10000000/4000.0)));
 void interrupt isr(void){
 if (INT1IF){
 
-# 498
+# 691
 switch(PORTB){
 case 239:
 can_display_position = -1;
@@ -4349,21 +4506,8 @@ log_position += 1;
 curr_state = LOGS;
 break;
 case 15:
-LATAbits.LATA2 = 1;
-INT0IE = 1;
-INT2IE = 1;
-TMR0IE = 1;
-TMR0ON = 1;
-TMR0 = 0;
-read_time();
-start_time[1] = time[1];
-start_time[0] = time[0];
 
-canqueue_head = canqueue_tail = 0;
-
-lcdInst(0b00000001);
-can_display_position = -1;
-servo_rotate0(90);
+# 715
 curr_state = OPERATION;
 break;
 case 31:
@@ -4374,12 +4518,7 @@ break;
 case 47:
 operation_time = etime - stime;
 
-
-LoggedTimes[0] = operation_time;
-LoggedTimes[1] = LoggedTimes[0];
-LoggedTimes[2] = LoggedTimes[1];
-LoggedTimes[3] = LoggedTimes[2];
-
+# 731
 can_display_position = -1;
 curr_state = CANTIME;
 break;
@@ -4388,19 +4527,6 @@ can_display_position = -1;
 curr_state = STANDBY;
 break;
 case 79:
-LATAbits.LATA2 = 0;
-INT0IE = 0;
-INT2IE = 0;
-TMR0IE = 0;
-TMR0ON = 0;
-
-read_time();
-end_time[1] = time[1];
-end_time[0] = time[0];
-stime = 60*dec_to_hex(start_time[1])+dec_to_hex(start_time[0]);
-etime = 60*dec_to_hex(end_time[1])+dec_to_hex(end_time[0]);
-lcdInst(0b00000001);
-can_display_position = -1;
 curr_state = OPERATIONEND;
 break;
 case 207:
@@ -4412,29 +4538,36 @@ lcdInst(0b00000001);
 curr_state = EMERGENCYSTOP;
 break;
 case 127:
+read_time();
+start_time[1] = time[1];
+start_time[0] = time[0];
+lcdInst(0b00000001);
 
+can_display_position = -1;
 
-servo_rotate0(90);
-
-
-
-
+LightSensorRA4_Soup();
 break;
 case 191:
+read_time();
+start_time[1] = time[1];
+start_time[0] = time[0];
+lcdInst(0b00000001);
 
-ADC_display();
+can_display_position = -1;
 
 
+curr_state = OPERATION;
 
+# 775
 break;
 }
 INT1IF = 0;
 }
 
-# 602
+# 795
 else if (INT0IF){
 if(PORTAbits.RA0){
-ADC_display();
+ADC_RA3();
 
 _delay((unsigned long)((150)*(10000000/4000.0)));
 }
@@ -4450,22 +4583,22 @@ switch (data){
 case 0:
 servo_rotate0(0);
 servo_rotate2(0);
-SOUP_LBL_count += 1;
+
 break;
 case 1:
 servo_rotate0(0);
 servo_rotate2(0);
-SOUP_NOLBL_count += 1;
+
 break;
 case 2:
 servo_rotate0(0);
 servo_rotate2(120);
-POPCAN_TAB_count += 1;
+
 break;
 case 3:
 servo_rotate0(0);
 servo_rotate2(120);
-POPCAN_NOTAB_count += 1;
+
 break;
 
 }
@@ -4473,7 +4606,7 @@ break;
 INT2IF = 0;
 }
 
-# 658
+# 851
 else{
 while(1){
 lcdInst(0b10000000);
@@ -4502,19 +4635,28 @@ I2C_Master_Stop();
 
 }
 
+
+void DCforwardPWM(void){
+LATAbits.LATA0 = 0;
+DC_motor_direction = 0;
+while(1){
+LATAbits.LATA1 = 1;
+_delay((unsigned long)((1000)*(10000000/4000.0)));
+LATAbits.LATA1 = 0;
+}
+}
+
+# 905
 void standby(void){
 getRTC();
 lcdInst(0b10000000);
 
-# 695
+printf("%02x/%02x %02x:%02x:%02x", time[5],time[4],time[2],time[1],time[0]);
+lcdInst(0b11000000);
+
 printf("1:Start #:Logs  ");
 
-
-
-lcdInst(0b11000000);
-printf("DEBUGPORTB: %d ", PORTB);
-return;
-
+# 920
 }
 
 void set_time(void){
@@ -4556,19 +4698,6 @@ time[i] = I2C_Master_Read(1);
 }
 time[6] = I2C_Master_Read(0);
 I2C_Master_Stop();
-return;
-}
-
-void keyPressed(void){
-while(PORTBbits.RB1 == 0){
-
-
-}
-keypress = (PORTB & 0xF0)>>4;
-while(PORTBbits.RB1 == 1){
-
-}
-__nop();
 return;
 }
 
@@ -4700,36 +4829,34 @@ return;
 }
 
 void operation(void){
-lcdInst(0b10000000);
-printf("Running..              ");
-lcdInst(0b11000000);
-printf("PRESS 4 TO STOP  ");
+
+
+
+
+printf("%02x %02x       ", start_time[1], start_time[0]);
+_delay((unsigned long)((500)*(10000000/4000.0)));
 int i;
 INT1IF = 0;
-while(!INT1IF){
-for (i=0; i<50; i++) {
 
+# 1105
+while(1){
+_delay((unsigned long)((1000)*(10000000/4000.0)));
+read_time();
+curr_time[1] = time[1] - start_time[1];
+curr_time[0] = time[0] - start_time[0];
 
-LATCbits.LATC0 = 1;
-_delay((unsigned long)((1.5)*(10000000/4000.0)));
-LATCbits.LATC0 = 0;
-_delay((unsigned long)((18.5)*(10000000/4000.0)));
+getRTC();
+lcdInst(0b10000000);
+printf("%02x %02x    %02x   %02x  ", curr_time[1], curr_time[0] , time[1], time[0]);
 
-}
+lcdInst(0b11000000);
 
-
-for (i=0; i<50; i++) {
-
-# 912
-LATCbits.LATC0 = 1;
-_delay((unsigned long)((1)*(10000000/4000.0)));
-LATCbits.LATC0 = 0;
-_delay((unsigned long)((19)*(10000000/4000.0)));
-
+if(curr_time[0] >= 10){
+curr_state = OPERATIONEND;
 }
 }
 
-# 952
+# 1154
 return;
 }
 
@@ -4737,6 +4864,36 @@ void operationend(void){
 lcdInst(0b11000000);
 lcdInst(0b11000000);
 printf("Operation Done!  ");
+_delay((unsigned long)((1000)*(10000000/4000.0)));
+
+LATCbits.LATC0 = 0;
+INT0IE = 0;
+INT2IE = 0;
+TMR0IE = 0;
+TMR0ON = 0;
+
+read_time();
+end_time[1] = time[1];
+end_time[0] = time[0];
+stime = 60*dec_to_hex(start_time[1])+dec_to_hex(start_time[0]);
+etime = 60*dec_to_hex(end_time[1])+dec_to_hex(end_time[0]);
+lcdInst(0b00000001);
+can_display_position = -1;
+curr_state = STANDBY;
+
+operation_time = etime - stime;
+TempTimes[3] = LoggedTimes[3];
+TempTimes[2] = LoggedTimes[2];
+TempTimes[1] = LoggedTimes[1];
+TempTimes[0] = LoggedTimes[0];
+
+LoggedTimes[3] = TempTimes[2];
+LoggedTimes[2] = TempTimes[1];
+LoggedTimes[1] = TempTimes[0];
+LoggedTimes[0] = operation_time;
+
+
+
 return;
 }
 
@@ -4772,7 +4929,6 @@ void read_sensor(void){
 return;
 }
 
-# 999
 void read_ADC(void){
 readADC(3);
 lcdInst(0b10000000);
@@ -4811,7 +4967,7 @@ for(char i=0;i<100;i++){_delay((unsigned long)((10)*(10000000/4000.0)));};
 return;
 }
 
-# 1041
+# 1268
 void set_external_interrupt0(float time) {
 
 
@@ -4849,7 +5005,7 @@ TMR2ON = 1;
 return;
 }
 
-# 1092
+# 1319
 void servo_ISR(void) {
 
 TMR1IF = 0;
@@ -4872,7 +5028,7 @@ LATCbits.LC0 = 1;
 return;
 }
 
-# 1125
+# 1352
 void update_servo_position(float bat_type) {
 
 extern volatile float servo_up_period;
@@ -4885,7 +5041,7 @@ return;
 
 int stepper_state;
 
-# 1141
+# 1368
 void stepper_rotate(void){
 unsigned int i;
 unsigned int j;
@@ -4920,6 +5076,20 @@ _delay((unsigned long)((10)*(10000000/4000.0)));
 
 }
 
+return;
+}
+
+# 1536
+void keyPressed(void){
+while(PORTBbits.RB1 == 0){
+
+
+}
+keypress = (PORTB & 0xF0)>>4;
+while(PORTBbits.RB1 == 1){
+
+}
+__nop();
 return;
 }
 
