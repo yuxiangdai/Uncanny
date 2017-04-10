@@ -138,7 +138,7 @@ int minutes_difference;
 int start_minutes;
 int start_seconds;
 
-int OPERATION_TIME_COUNTER;
+int Total_Operation_Time;
 
 int LoggedTimes[4] = {0,0,0, 0};
 int TempTimes[4] = {0,0,0, 0};
@@ -390,7 +390,7 @@ void main(void) {
 
 void FINALoperation(void){
     LATEbits.LATE0 = 1;   //RA6 - Push in the solenoid
-    servo_rotate_RC0(90);  // Set Solenoids to Initial Position
+    servo_rotate_RC0(90);  // Set Servos to Initial Position
     servo_rotate_RC1(90);  
     
     run_number = 0;   
@@ -400,248 +400,317 @@ void FINALoperation(void){
     POPCAN_TAB_count[run_number] = 0;
     POPCAN_NOTAB_count[run_number] = 0;
     TOTAL_CAN_count[run_number] = 0;  
-    OPERATION_TIME_COUNTER = 0;    
     
+    Total_Operation_Time = 0;    
     
-    //====================
-    // ROTATING CONE STUFF
-    //==================== 
     ROTATION_COUNT = 0; // For incrementing rotation routine, if weight slows
-         
-    LATCbits.LATC5 = 1; 
-    LATCbits.LATC6 = 0; 
+      
+    //====================
+    // ROTATING CONE LOOP
+    //==================== 
     
-    for (int i=0; i<250; i++) {
-        LATCbits.LATC7 = 1; 
-        __delay_ms(5);
-        LATCbits.LATC7 = 0; 
-        __delay_ms(15);
-        if(i == 225){ // Run windmill for 0.5 second
-            LATAbits.LATA1 = 1; 
-            LATAbits.LATA0 = 0;
-        }
+    LATCbits.LATC5 = 1; 
+    LATCbits.LATC6 = 0;
+
+    for (int i = 0; i < 10; i++) {
+        LATCbits.LATC7 = 1;
+        __delay_ms(10);
+        LATCbits.LATC7 = 0;
+        __delay_ms(10);
     }
     
-    LATAbits.LATA1 = 0; 
-    LATAbits.LATA0 = 0;
+    Total_Operation_Time += 20*10;
+
+    for (int i = 0; i < 17; i++) {
+        LATCbits.LATC7 = 1;
+        __delay_ms(4);
+        LATCbits.LATC7 = 0;
+        __delay_ms(16);
+    }
+
+    Total_Operation_Time += 20*17;
     
-    ROTATION_COUNT += 1; 
-                
+    //__delay_ms(250);
+
+    LATCbits.LATC5 = 0;
+    LATCbits.LATC6 = 1;
+
+    for (int i = 0; i < 22; i++) {
+        LATCbits.LATC7 = 1;
+        __delay_ms(6);
+        LATCbits.LATC7 = 0;
+        __delay_ms(14);
+    }
     
+    Total_Operation_Time += 20*22;
     
     //===============
     // WINDMILL STUFF
     //===============
-    
-    while(TOTAL_CAN_count[run_number] < 12 && OPERATION_TIME_COUNTER < 180){
-        if(PORTAbits.RA4){ //RA4 - Sensor on Soup Can sides
-            LATAbits.LATA1 = 0;  // Stop Windmill
+
+    while (TOTAL_CAN_count[run_number] < 12 && Total_Operation_Time < 180*1000) {
+        if (PORTAbits.RA4) { //RA4 - Sensor on Soup Can sides
+            LATAbits.LATA1 = 0; // Stop Windmill
             TOTAL_CAN_count[run_number] += 1;
-            
-            __delay_ms(500);
-            
-            for(int i=0; i<5; i++){
-                readADC(2);  
+
+            __delay_ms(500); Total_Operation_Time += 500;
+
+            for (int i = 0; i < 5; i++) {
+                readADC(2);
                 __lcd_newline();
-                printf("ADRESH %x ", ADRESH*256);
+                printf("ADRESH %x ", ADRESH * 256);
                 __lcd_newline();
-                
-                if (ADRESH*256 > 100){
-                    LATEbits.LATE0 = 0;  // some interference
+
+                if (ADRESH * 256 > 100) {
+                    LATEbits.LATE0 = 0; // some interference
                     LATEbits.LATE1 = 0;
                     conductive = 1;
-                    while(PORTAbits.RA4){
-                        servo_rotate_RC1(180); // RC1 for Soup Can side
+                    while (PORTAbits.RA4) {
+                        // RC1 for Soup Can side
+                        servo_rotate_RC1(180); Total_Operation_Time += 20*70;
                     }
                     SOUP_LBL_count[run_number] += 1;
                 }
-                __delay_ms(500);
+                __delay_ms(500); Total_Operation_Time += 500;
             }
-               // readADC(2) - RA2 for Soup Can side    
-            if (!conductive){
+            // readADC(2) - RA2 for Soup Can side    
+            if (!conductive) {
                 LATEbits.LATE0 = 0;
                 LATEbits.LATE1 = 0;
-                while(PORTAbits.RA4){
-                    servo_rotate_RC1(0);
+                while (PORTAbits.RA4) {
+                    servo_rotate_RC1(0); Total_Operation_Time += 20*70;
                 }
                 SOUP_NOLBL_count[run_number] += 1;
             }
-            
-            
-            servo_rotate_RC1(90);
+
+            servo_rotate_RC1(90); Total_Operation_Time += 20*70;
             conductive = 0;
-            
+
             LATEbits.LATE0 = 1;
             LATEbits.LATE1 = 1;
-            
-        }  
-         else if (PORTAbits.RA5) {
+        }
+        else if (PORTAbits.RA5) {
             TOTAL_CAN_count[run_number] += 1;
             //RA5 - Sensor on Pop Can sides
-            LATAbits.LATA1 = 0;  // Stop motor
-            
-            __delay_ms(500);
-            servo_rotate_RC0(85);
-            
+            LATAbits.LATA1 = 0; // Stop motor
+//            __delay_ms(500);
+//            Total_Operation_Time += 500;
+        
+            servo_rotate_RC0(85); Total_Operation_Time += 20*70;
+
             LATEbits.LATE0 = 0;
-            
-            
-            for(int i=0; i<5; i++){
-                readADC(3);     // readADC(3) - RA3 - Pop Can side
-                __lcd_newline();
-                printf("POP: ");
-                __lcd_newline();
-                printf("%x %x       ", ADRESH*256, PORTAbits.RA3);
-                __delay_ms(400);
-                if (ADRESH*256 > 300 && !conductive){
-                    LATEbits.LATE0 = 1;
-                    LATEbits.LATE1 = 1;
-                  
-                    __delay_ms(1000);
-                   
-                    conductive = 1;
-                    while (PORTAbits.RA5) {
-                        servo_rotate_RC0(180);
-                        servo_rotate_RC0(90);
-                    }   
-                      // RC0 for Pop Can side
-                    
-                    POPCAN_TAB_count[run_number] += 1;
-                } 
+
+            for (int i = 0; i < 5; i++) {
+                readADC(3); // readADC(3) - RA3 - Pop Can side
+//                __lcd_newline();
+//                printf("POP: ");
+//                __lcd_newline();
+//                printf("%x %x       ", ADRESH * 256, PORTAbits.RA3);
+                __delay_ms(250); Total_Operation_Time += 400;
                 
+                if (ADRESH * 256 > 300 && !conductive) {
+                    LATEbits.LATE0 = 1;
+                    __delay_ms(500);
+                    Total_Operation_Time += 500;
+                    
+                    conductive = 1;
+                    while (PORTAbits.RA5) { // RC0 for Pop Can side
+                        servo_rotate_RC0(180); Total_Operation_Time += 20*70;
+                        servo_rotate_RC0(90); Total_Operation_Time += 20*70;
+                    }           
+                    POPCAN_TAB_count[run_number] += 1;
+ 
+                } else if (conductive) {
+                    break;
+                }
             }
-            
-            if(!conductive){
+
+            if (!conductive) {
                 LATEbits.LATE0 = 1;
                 LATEbits.LATE1 = 1;
-                
+
                 while (PORTAbits.RA5) {
                     servo_rotate_RC0(0);
-                    servo_rotate_RC0(90);
-                }   
+                    Total_Operation_Time += 20*70;
+                    servo_rotate_RC0(90);                
+                    Total_Operation_Time += 20*70;
+                }
                 POPCAN_NOTAB_count[run_number] += 1;
-                
+
             }
-            
+
             conductive = 0;
             LATEbits.LATE0 = 1;
             LATEbits.LATE1 = 1;
-            
+
         }
-    
         else {
-             
+            
             //====================
             // ROTATING CONE STUFF
             //====================  
-             
-            LATCbits.LATC5 = 1; 
-            LATCbits.LATC6 = 0; 
-    
-            for (int i=0; i<250; i++) {
-                LATCbits.LATC7 = 1; 
-                __delay_ms(7);
-                LATCbits.LATC7 = 0; 
-                __delay_ms(13);
-                if(i == 225){ // Run windmill for 1 second
-                    LATAbits.LATA1 = 1; 
-                    LATAbits.LATA0 = 0;
+
+            for (int i = 0; i < 3; i++) {  //Do forward/backwards five times
+
+                LATCbits.LATC5 = 1;
+                LATCbits.LATC6 = 0;
+
+                if (ROTATION_COUNT > 10) {
+                    for (int i = 0; i < 10; i++) {
+                        LATCbits.LATC7 = 1;
+                        __delay_ms(6); //Slower speed for less cans
+                        LATCbits.LATC7 = 0;
+                        __delay_ms(14);
+                    }
+                    
+                    Total_Operation_Time += 20*10;
+
+                    for (int i = 0; i < 17; i++) {
+                        LATCbits.LATC7 = 1;
+                        __delay_ms(4);
+                        LATCbits.LATC7 = 0;
+                        __delay_ms(16);
+                    }
+                    
+                    Total_Operation_Time += 20*17;
+
+                    //__delay_ms(250);
+
+                    LATCbits.LATC5 = 0;
+                    LATCbits.LATC6 = 1;
+
+                    for (int i = 0; i < 22; i++) {
+                        LATCbits.LATC7 = 1;
+                        __delay_ms(4);
+                        LATCbits.LATC7 = 0;
+                        __delay_ms(16);
+                    }
+                    
+                    Total_Operation_Time += 20*22;
+
                 }
+                else {
+                    for (int i = 0; i < 10; i++) {
+                        LATCbits.LATC7 = 1;
+                        __delay_ms(10);
+                        LATCbits.LATC7 = 0;
+                        __delay_ms(10);
+                    }
+                    
+                    Total_Operation_Time += 20*10;
+
+                    for (int i = 0; i < 17; i++) {
+                        LATCbits.LATC7 = 1;
+                        __delay_ms(4);
+                        LATCbits.LATC7 = 0;
+                        __delay_ms(16);
+                    }
+
+                    Total_Operation_Time += 20*17;
+                    //__delay_ms(250);
+
+                    LATCbits.LATC5 = 0;
+                    LATCbits.LATC6 = 1;
+
+                    for (int i = 0; i < 22; i++) {
+                        LATCbits.LATC7 = 1;
+                        __delay_ms(6);
+                        LATCbits.LATC7 = 0;
+                        __delay_ms(14);
+                    }
+                    
+                    Total_Operation_Time += 20*22;
+
+                }
+
+                ROTATION_COUNT += 1;
+
             }
-    
-            LATAbits.LATA1 = 0; 
-            LATAbits.LATA0 = 0;
-    
-            ROTATION_COUNT += 1;  
-             
+
             //===============
             // WINDMILL STUFF
             //===============
-             
+
             LATAbits.LATA1 = 1; //Start forwards
-            __delay_ms(500);    
+            __delay_ms(500);
             LATAbits.LATA1 = 0; // Stop backwards
-            __delay_ms(1500);  /// Wait for cans to drop into places
+            __delay_ms(1500); /// Wait for cans to drop into places
             LATAbits.LATA0 = 1; // Go backwards 
-            __delay_ms(300); 
+            __delay_ms(300);
             LATAbits.LATA0 = 0; // Stop backwards
-            __delay_ms(1500);  /// Wait for cans to drop into places
+            __delay_ms(1500); /// Wait for cans to drop into places
             
-            
-            OPERATION_TIME_COUNTER += 3.95;
-            
+            Total_Operation_Time += 3800;
         }
     }
-    
+
     curr_state = OPERATIONEND;
-    
+
 }
 
-void LightSensorRA4_Soup(void){
-    
-    servo_rotate_RC1(90); 
-    LATEbits.LATE0 = 1;  //RA6 - Push in the solenoid
-    
+
+// <editor-fold defaultstate="collapsed" desc="Soup & Pop Tests">
+
+
+void LightSensorRA4_Soup(void) {
+
+    servo_rotate_RC1(90);
+    LATEbits.LATE0 = 1; //RA6 - Push in the solenoid
+
     run_number = 0;
     conductive = 0;
     SOUP_LBL_count[run_number] = 0;
     SOUP_NOLBL_count[run_number] = 0;
     POPCAN_TAB_count[run_number] = 0;
     POPCAN_NOTAB_count[run_number] = 0;
-    TOTAL_CAN_count[run_number] = 0;  
-    
-    while(TOTAL_CAN_count[run_number] < 12){
+    TOTAL_CAN_count[run_number] = 0;
+
+    while (TOTAL_CAN_count[run_number] < 12) {
         __lcd_home();
-        printf("%x %x %x %x %x", SOUP_LBL_count[run_number], SOUP_NOLBL_count[run_number],  POPCAN_TAB_count[run_number], POPCAN_NOTAB_count[run_number], TOTAL_CAN_count[run_number]);
+        printf("%x %x %x %x %x", SOUP_LBL_count[run_number], SOUP_NOLBL_count[run_number], POPCAN_TAB_count[run_number], POPCAN_NOTAB_count[run_number], TOTAL_CAN_count[run_number]);
         LATEbits.LATE0 = 1;
         LATEbits.LATE1 = 1;
-        
-        if(PORTAbits.RA4){   // if    
+
+        if (PORTAbits.RA4) { // if    
             //RA4 - Sensor on Soup Can sides
-            LATAbits.LATA1 = 0;  // Stop motor
+            LATAbits.LATA1 = 0; // Stop motor
             TOTAL_CAN_count[run_number] += 1;
-            
+
             __delay_ms(1000);
-            
-            for(int i=0; i<5; i++){
-                readADC(2);  
+
+            for (int i = 0; i < 5; i++) {
+                readADC(2);
                 __lcd_newline();
-                printf("ADRESH %x ", ADRESH*256);
+                printf("ADRESH %x ", ADRESH * 256);
                 __lcd_newline();
-                
-                if (ADRESH*256 > 100){
-                    LATEbits.LATE0 = 0;  // some interference
+
+                if (ADRESH * 256 > 100) {
+                    LATEbits.LATE0 = 0; // some interference
                     conductive = 1;
-                    while(PORTAbits.RA4){
+                    while (PORTAbits.RA4) {
                         servo_rotate_RC1(180); // RC1 for Soup Can side                    
                         servo_rotate_RC1(90);
                     }
-                    
+
                     SOUP_LBL_count[run_number] += 1;
                 }
                 __delay_ms(300);
             }
-               // readADC(2) - RA2 for Soup Can side    
-            if (!conductive){
+            // readADC(2) - RA2 for Soup Can side    
+            if (!conductive) {
                 LATEbits.LATE0 = 0;
-                
-                while(PORTAbits.RA4){
+
+                while (PORTAbits.RA4) {
                     servo_rotate_RC1(0);
                     servo_rotate_RC1(90);
                 }
                 SOUP_NOLBL_count[run_number] += 1;
             }
-            
-            
-            
             conductive = 0;
-            
+
             LATEbits.LATE0 = 1;
             LATEbits.LATE1 = 1;
-            
-        }  
-        
-        
+        }
         else {
             LATAbits.LATA1 = 1; 
             __delay_ms(650);    
@@ -656,17 +725,13 @@ void LightSensorRA4_Soup(void){
 //                 // GO BACKWARDS
 //                   ///WAIT SOME MORE TIME
 //            }
-        }
-        
-        
+        }   
     }    
-    curr_state = OPERATIONEND;
+    curr_state = OPERATIONEND; //at the end of while loop, go to operationend
 }
 
 
 void LightSensorRA5_Pop(void){
-    
-    
     LATEbits.LATE0 = 1;  //RA6 - Push in the solenoid
     
     servo_rotate_RC0(90); 
@@ -737,9 +802,7 @@ void LightSensorRA5_Pop(void){
             LATEbits.LATE0 = 1;
             LATEbits.LATE1 = 1;
             
-        }
-        
-        
+        }    
         else {
             LATAbits.LATA1 = 1; 
             __delay_ms(650);    
@@ -754,12 +817,12 @@ void LightSensorRA5_Pop(void){
 //                 // GO BACKWARDS
 //                   ///WAIT SOME MORE TIME
 //            }
-        }
-        
-        
+        }   
     }    
     curr_state = OPERATIONEND;
 }
+
+// </editor-fold>
 
 void ADC_RA3(void){
     while(1) {
@@ -776,22 +839,16 @@ void ADC_RA3(void){
        
        servo_rotate_RC1(90);
        
-//       
-//       
-//       analog_reading= ADRESL + (ADRESH *256);
-//       printf(analog_reading); 
-       
-       
        readADC(3);
        printf("%x %x", ADRESH*256,ADRESL);
-       
-       
+
        printf("    ");
        __delay_1s();
     }
 }
 
-// <editor-fold defaultstate="collapsed" desc="Servo config">
+// <editor-fold defaultstate="collapsed" desc="Servo Codes">
+
 
 
 void servo_rotate0(int degree){  
@@ -921,6 +978,8 @@ void servo_rotate_RC1(int degree){
     return;
 }
 
+// </editor-fold>
+
 void delay_10ms(unsigned char n) { 
          while (n-- != 0) { 
              __delay_ms(10); 
@@ -936,12 +995,6 @@ void interrupt isr(void){
                 curr_state = LOGS;
                 break;
             case 15:    //KP_1     
-//                INT0IE = 1;     //Enable external interrupts
-//                INT2IE = 1;
-//                TMR0IE = 1;     //Start timer with interrupts
-//                TMR0ON = 1;
-//                TMR0 = 0;             
-//                canqueue_head = canqueue_tail = 0; //Initiate queue
                 read_time();
                 start_time[1] = time[1];
                 start_time[0] = time[0];
@@ -984,83 +1037,59 @@ void interrupt isr(void){
                 break;
             case 79:    //KP_4
                 
-               ROTATION_COUNT = 0; 
-               LATEbits.LATE0 = 1; 
-               while(1){
-                    
-                    
-                    
-               LATCbits.LATC5 = 1; 
-               LATCbits.LATC6 = 0; 
-
-               
+//               ROTATION_COUNT = 0; 
+//               LATEbits.LATE0 = 1; 
+//               while(1){
+//                    
+//                    
+//                    
+//               LATCbits.LATC5 = 1; 
+//               LATCbits.LATC6 = 0; 
+//
 //               
-               
-               switch(ROTATION_COUNT){
-                    case 0:
-                        for (int i=0; i<250; i++) {
-                                LATCbits.LATC7 = 1; 
-                                __delay_ms(15);
-                                LATCbits.LATC7 = 0; 
-                                __delay_ms(5);
-                                if(i == 200){ // Run windmill for 1 second
-                                    LATAbits.LATA1 = 1; 
-                                    LATAbits.LATA0 = 0;
-                                }
-                        }
-                        break;
-                    case 1:
-                        for (int i=0; i<250; i++) {
-                                LATCbits.LATC7 = 1; 
-                                __delay_ms(10);
-                                LATCbits.LATC7 = 0; 
-                                __delay_ms(10);
-                                if(i == 150){
-                                    LATAbits.LATA1 = 0; 
-                                    LATAbits.LATA0 = 0;
-                                }
-                        }
-                        break;
-                    default:
-                        for (int i=0; i<250; i++) {
-                                LATCbits.LATC7 = 1; 
-                                __delay_ms(10);
-                                LATCbits.LATC7 = 0; 
-                                __delay_ms(10);
+////               
+//               
+//               switch(ROTATION_COUNT){
+//                    case 0:
+//                        for (int i=0; i<250; i++) {
+//                                LATCbits.LATC7 = 1; 
+//                                __delay_ms(15);
+//                                LATCbits.LATC7 = 0; 
+//                                __delay_ms(5);
+//                                if(i == 200){ // Run windmill for 1 second
+//                                    LATAbits.LATA1 = 1; 
+//                                    LATAbits.LATA0 = 0;
+//                                }
+//                        }
+//                        break;
+//                    case 1:
+//                        for (int i=0; i<250; i++) {
+//                                LATCbits.LATC7 = 1; 
+//                                __delay_ms(10);
+//                                LATCbits.LATC7 = 0; 
+//                                __delay_ms(10);
 //                                if(i == 150){
 //                                    LATAbits.LATA1 = 0; 
 //                                    LATAbits.LATA0 = 0;
 //                                }
-                        }
-                        break;   
-               }          
+//                        }
+//                        break;
+//                    default:
+//                        for (int i=0; i<250; i++) {
+//                                LATCbits.LATC7 = 1; 
+//                                __delay_ms(10);
+//                                LATCbits.LATC7 = 0; 
+//                                __delay_ms(10);
+////                                if(i == 150){
+////                                    LATAbits.LATA1 = 0; 
+////                                    LATAbits.LATA0 = 0;
+////                                }
+//                        }
+//                        break;   
+//               }          
                
-              
-                   
-                   
-               __delay_ms(1000);
-               LATCbits.LATC5 = 0; 
-               LATCbits.LATC6 = 1;
-                
                
-//               LATAbits.LATA1 = 0; 
-//               LATAbits.LATA0 = 1;
-                for (int i=0; i<50; i++) {
-                   LATCbits.LATC7 = 1; 
-                   __delay_ms(8);
-                   LATCbits.LATC7 = 0; 
-                   __delay_ms(12);
-                }
-               
-                LATAbits.LATA1 = 0; 
-                LATAbits.LATA0 = 0;
-                
-                __delay_ms(1000);
-                ROTATION_COUNT += 1; 
-                
-                }
-               
-                //curr_state = OPERATIONEND;
+                curr_state = OPERATIONEND;
                 break;
             case 207:   //KP_*
                 LATAbits.LATA2 = 0; //Stop motor
@@ -1100,32 +1129,54 @@ void interrupt isr(void){
                 LightSensorRA5_Pop();
                 break;
             case 255:   //KP_D
-//                
-//                LATCbits.LATC5 = 1; 
-//    LATCbits.LATC6 = 0; 
-//    
-//    for (int i=0; i<250; i++) {
-//        LATCbits.LATC7 = 1; 
-//        __delay_ms(5);
-//        LATCbits.LATC7 = 0; 
-//        __delay_ms(15);
-//        if(i == 225){ // Run windmill for 0.5 second
-//            LATAbits.LATA1 = 1; 
-//            LATAbits.LATA0 = 0;
-//        }
-//    }
-//    
-
-                for (int i=0; i<70; i++) {
-                LATCbits.LATC0 = 1;
-                __delay_ms(1.2);
-                LATCbits.LATC0 = 0;
-                __delay_ms(18.8);
-                }
-         
-                
-//                curr_state = OPERATION;
+                curr_state = OPERATION;
                 break;
+            case 143: // KP_7  CONE SPEED TEST
+                LATCbits.LATC5 = 1; 
+                LATCbits.LATC6 = 0; 
+    
+//                for (int i=0; i<150; i++) {
+//                   LATCbits.LATC7 = 1; 
+//                    __delay_ms(5);
+//                    LATCbits.LATC7 = 0; 
+//                   __delay_ms(15);
+//                }
+                
+                while(1){
+                    
+                    LATCbits.LATC5 = 1; 
+                    LATCbits.LATC6 = 0;
+                    
+                    for (int i=0; i<10; i++) {
+                        LATCbits.LATC7 = 1; 
+                         __delay_ms(10);
+                         LATCbits.LATC7 = 0; 
+                        __delay_ms(10);
+                     }
+                    
+                    for (int i=0; i<15; i++) {
+                        LATCbits.LATC7 = 1; 
+                         __delay_ms(4);
+                         LATCbits.LATC7 = 0; 
+                        __delay_ms(16);
+                     }
+                    
+//                    __delay_ms(250);
+                    
+                    LATCbits.LATC5 = 0; 
+                    LATCbits.LATC6 = 1;
+                
+                    for (int i=0; i<22; i++) {
+                       LATCbits.LATC7 = 1; 
+                        __delay_ms(6);
+                        LATCbits.LATC7 = 0; 
+                       __delay_ms(14);
+                    }
+                
+//                    __delay_ms(250);
+                }
+                
+                break;            
         }
         INT1IF = 0;
     }
@@ -1230,17 +1281,6 @@ void getRTC(void){
         time[6] = I2C_Master_Read(0);       //Final Read without ack
         I2C_Master_Stop();
     //Reset RTC memory pointer
-}
-
-
-void DCforwardPWM(void){
-    LATAbits.LATA0 = 0;
-    DC_motor_direction = 0;
-    while(1){
-        LATAbits.LATA1 = 1;
-        __delay_ms(1000);
-        LATAbits.LATA1 = 0;
-    }
 }
 
 void standby(void){
@@ -1458,43 +1498,42 @@ void operation(void){
 //    printf("Running..              ");  
 //    __lcd_newline();
 //    printf("PRESS 4 TO STOP  ");  
+    
+    read_time();
+    start_time[1] = time[1];
+    start_time[0] = time[0];
+    __lcd_clear();
+    
+    
     printf("start: %02x %02x       ", start_time[1], start_time[0]);
     __delay_ms(500);
     int i;
     INT1IF = 0;
-    minutes_difference = 0;
-    current_seconds = 0;
     start_minutes = start_time[1];
     start_seconds = start_time[0];
     time_diff = 0;
     
-//    TMR1IF = 1; //clear_interrupt(timer1);
-//    TMR1IE = 1;
-//    servo_ISR();
-    
     begin_time = 60*dec_to_hex(start_time[1])+dec_to_hex(start_time[0]);
     
     __lcd_newline();
-    printf("begin: %02x ", begin_time);
+    printf("begin: %x       ", begin_time);
     
     while(1){
         __delay_ms(1000);  
         read_time();
         
-                current_time[1] = time[1];
-                current_time[0] = time[0];
+        current_time[1] = time[1];
+        current_time[0] = time[0];
         
         curr_time = 60*dec_to_hex(current_time[1])+dec_to_hex(current_time[0]);
-        
-        minutes_difference = time[1] - start_time[1];
-        
-        time_diff = curr_time - begin_time;
-        
-        current_seconds = 60*(minutes_difference) + time[0] - start_time[0];
+ 
+        time_diff = (time[0] - 1);
         
         getRTC();
         __lcd_home();
-        printf("td: %x %02x %02x ", time_diff, time[1], time[0]);
+        printf("ct: %x | %x %x   ", curr_time, time[1], time[0]);
+        __lcd_newline();
+        printf("bt: %x | %x      ", begin_time, time_diff);
         //printf("%02x/%02x %02x:%02x:%02x", time[5],time[4],time[2],time[1],time[0]);    //Print date in YY/MM/DD
         __lcd_newline();
 
