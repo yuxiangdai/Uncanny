@@ -107,6 +107,9 @@ void DCforwardPWM(void);
 unsigned char time[7];
 unsigned char start_time[2];
 unsigned char end_time[2];
+
+unsigned char current_time[2];
+
 int stime;
 int etime;
 int operation_time;
@@ -121,6 +124,8 @@ int TOTAL_CAN_count[4] = {0,0,0,0};
 
 int degree = 0;
 
+int ROTATION_COUNT;
+
 int high = 0;
 int DC_motor_direction = 0;
 
@@ -132,6 +137,8 @@ int current_seconds;
 int minutes_difference;
 int start_minutes;
 int start_seconds;
+
+int OPERATION_TIME_COUNTER;
 
 int LoggedTimes[4] = {0,0,0, 0};
 int TempTimes[4] = {0,0,0, 0};
@@ -341,7 +348,7 @@ void readADC(char channel){
 void main(void) {
 //    set_time();
     initialize();
-    update_servo_position(C);
+//    update_servo_position(C);
     set_external_interrupt1(servo_down_period);
      
     TMR1IE = 0;
@@ -383,38 +390,198 @@ void main(void) {
 
 void FINALoperation(void){
     LATEbits.LATE0 = 1;   //RA6 - Push in the solenoid
-    servo_rotate_RC0(90);
-    servo_rotate_RC1(90);      
+    servo_rotate_RC0(90);  // Set Solenoids to Initial Position
+    servo_rotate_RC1(90);  
     
-        if(PORTAbits.RA4 ){   // if 
-            
-            //RA4 - Sensor on Soup Can sides
-            LATAbits.LATA1 = 0;  // Stop motor
-            readADC(2);     // readADC(2) - RA2 for Soup Can side
-            
-            if (ADRESH*256 > 299){
-                servo_rotate_RC1(180);  // RC1 for Soup Can side
-                
-            } else {
-                servo_rotate_RC1(0);
-            }
-            servo_rotate_RC1(90);
-            
-        } else {
-            LATAbits.LATA1 = 1;           
-            __delay_ms(500);    
-            LATAbits.LATA1 = 0;
-            __delay_ms(1000);
+    run_number = 0;   
+    conductive = 0;
+    SOUP_LBL_count[run_number] = 0;
+    SOUP_NOLBL_count[run_number] = 0;
+    POPCAN_TAB_count[run_number] = 0;
+    POPCAN_NOTAB_count[run_number] = 0;
+    TOTAL_CAN_count[run_number] = 0;  
+    OPERATION_TIME_COUNTER = 0;    
+    
+    
+    //====================
+    // ROTATING CONE STUFF
+    //==================== 
+    ROTATION_COUNT = 0; // For incrementing rotation routine, if weight slows
+         
+    LATCbits.LATC5 = 1; 
+    LATCbits.LATC6 = 0; 
+    
+    for (int i=0; i<250; i++) {
+        LATCbits.LATC7 = 1; 
+        __delay_ms(5);
+        LATCbits.LATC7 = 0; 
+        __delay_ms(15);
+        if(i == 225){ // Run windmill for 0.5 second
+            LATAbits.LATA1 = 1; 
+            LATAbits.LATA0 = 0;
         }
-        
+    }
+    
+    LATAbits.LATA1 = 0; 
+    LATAbits.LATA0 = 0;
+    
+    ROTATION_COUNT += 1; 
+                
+    
+    
+    //===============
+    // WINDMILL STUFF
+    //===============
+    
+    while(TOTAL_CAN_count[run_number] < 12 && OPERATION_TIME_COUNTER < 180){
+        if(PORTAbits.RA4){ //RA4 - Sensor on Soup Can sides
+            LATAbits.LATA1 = 0;  // Stop Windmill
+            TOTAL_CAN_count[run_number] += 1;
+            
+            __delay_ms(500);
+            
+            for(int i=0; i<5; i++){
+                readADC(2);  
+                __lcd_newline();
+                printf("ADRESH %x ", ADRESH*256);
+                __lcd_newline();
+                
+                if (ADRESH*256 > 100){
+                    LATEbits.LATE0 = 0;  // some interference
+                    LATEbits.LATE1 = 0;
+                    conductive = 1;
+                    while(PORTAbits.RA4){
+                        servo_rotate_RC1(180); // RC1 for Soup Can side
+                    }
+                    SOUP_LBL_count[run_number] += 1;
+                }
+                __delay_ms(500);
+            }
+               // readADC(2) - RA2 for Soup Can side    
+            if (!conductive){
+                LATEbits.LATE0 = 0;
+                LATEbits.LATE1 = 0;
+                while(PORTAbits.RA4){
+                    servo_rotate_RC1(0);
+                }
+                SOUP_NOLBL_count[run_number] += 1;
+            }
+            
+            
+            servo_rotate_RC1(90);
+            conductive = 0;
+            
+            LATEbits.LATE0 = 1;
+            LATEbits.LATE1 = 1;
+            
+        }  
+         else if (PORTAbits.RA5) {
+            TOTAL_CAN_count[run_number] += 1;
+            //RA5 - Sensor on Pop Can sides
+            LATAbits.LATA1 = 0;  // Stop motor
+            
+            __delay_ms(500);
+            servo_rotate_RC0(85);
+            
+            LATEbits.LATE0 = 0;
+            
+            
+            for(int i=0; i<5; i++){
+                readADC(3);     // readADC(3) - RA3 - Pop Can side
+                __lcd_newline();
+                printf("POP: ");
+                __lcd_newline();
+                printf("%x %x       ", ADRESH*256, PORTAbits.RA3);
+                __delay_ms(400);
+                if (ADRESH*256 > 300 && !conductive){
+                    LATEbits.LATE0 = 1;
+                    LATEbits.LATE1 = 1;
+                  
+                    __delay_ms(1000);
+                   
+                    conductive = 1;
+                    while (PORTAbits.RA5) {
+                        servo_rotate_RC0(180);
+                        servo_rotate_RC0(90);
+                    }   
+                      // RC0 for Pop Can side
+                    
+                    POPCAN_TAB_count[run_number] += 1;
+                } 
+                
+            }
+            
+            if(!conductive){
+                LATEbits.LATE0 = 1;
+                LATEbits.LATE1 = 1;
+                
+                while (PORTAbits.RA5) {
+                    servo_rotate_RC0(0);
+                    servo_rotate_RC0(90);
+                }   
+                POPCAN_NOTAB_count[run_number] += 1;
+                
+            }
+            
+            conductive = 0;
+            LATEbits.LATE0 = 1;
+            LATEbits.LATE1 = 1;
+            
+        }
+    
+        else {
+             
+            //====================
+            // ROTATING CONE STUFF
+            //====================  
+             
+            LATCbits.LATC5 = 1; 
+            LATCbits.LATC6 = 0; 
+    
+            for (int i=0; i<250; i++) {
+                LATCbits.LATC7 = 1; 
+                __delay_ms(7);
+                LATCbits.LATC7 = 0; 
+                __delay_ms(13);
+                if(i == 225){ // Run windmill for 1 second
+                    LATAbits.LATA1 = 1; 
+                    LATAbits.LATA0 = 0;
+                }
+            }
+    
+            LATAbits.LATA1 = 0; 
+            LATAbits.LATA0 = 0;
+    
+            ROTATION_COUNT += 1;  
+             
+            //===============
+            // WINDMILL STUFF
+            //===============
+             
+            LATAbits.LATA1 = 1; //Start forwards
+            __delay_ms(500);    
+            LATAbits.LATA1 = 0; // Stop backwards
+            __delay_ms(1500);  /// Wait for cans to drop into places
+            LATAbits.LATA0 = 1; // Go backwards 
+            __delay_ms(300); 
+            LATAbits.LATA0 = 0; // Stop backwards
+            __delay_ms(1500);  /// Wait for cans to drop into places
+            
+            
+            OPERATION_TIME_COUNTER += 3.95;
+            
+        }
+    }
+    
+    curr_state = OPERATIONEND;
+    
 }
 
 void LightSensorRA4_Soup(void){
-    LATEbits.LATE0 = 1;  //RA6 - Push in the solenoid
-    LATEbits.LATE1 = 1;
-    servo_rotate_RC0(90);
-    __delay_ms(100);
+    
     servo_rotate_RC1(90); 
+    LATEbits.LATE0 = 1;  //RA6 - Push in the solenoid
+    
     run_number = 0;
     conductive = 0;
     SOUP_LBL_count[run_number] = 0;
@@ -444,78 +611,40 @@ void LightSensorRA4_Soup(void){
                 
                 if (ADRESH*256 > 100){
                     LATEbits.LATE0 = 0;  // some interference
-                    LATEbits.LATE1 = 0;
                     conductive = 1;
-                    servo_rotate_RC1(180);  // RC1 for Soup Can side
+                    while(PORTAbits.RA4){
+                        servo_rotate_RC1(180); // RC1 for Soup Can side                    
+                        servo_rotate_RC1(90);
+                    }
+                    
                     SOUP_LBL_count[run_number] += 1;
                 }
-                __delay_ms(500);
+                __delay_ms(300);
             }
                // readADC(2) - RA2 for Soup Can side    
             if (!conductive){
                 LATEbits.LATE0 = 0;
-                LATEbits.LATE1 = 0;
-                servo_rotate_RC1(0);
+                
+                while(PORTAbits.RA4){
+                    servo_rotate_RC1(0);
+                    servo_rotate_RC1(90);
+                }
                 SOUP_NOLBL_count[run_number] += 1;
             }
             
             
-            servo_rotate_RC1(90);
+            
             conductive = 0;
             
             LATEbits.LATE0 = 1;
             LATEbits.LATE1 = 1;
             
         }  
-//        else if (PORTAbits.RA5) {
-//            TOTAL_CAN_count[run_number] += 1;
-//            //RA5 - Sensor on Pop Can sides
-//            LATAbits.LATA1 = 0;  // Stop motor
-//            
-//            __delay_ms(500);
-//            
-//            LATEbits.LATE0 = 0;
-//            LATEbits.LATE1 = 0;
-//            __lcd_newline();
-//            printf("POP: ");
-//            
-//            for(int i=0; i<5; i++){
-//                readADC(3);     // readADC(3) - RA3 - Pop Can side
-//                __lcd_newline();
-//                printf("%x %x       ", ADRESH*256, PORTAbits.RA3);
-//                __delay_ms(400);
-//                if (ADRESH*256 > 300){
-//                    LATEbits.LATE0 = 1;
-//                    LATEbits.LATE1 = 1;
-//                    
-//                    __delay_ms(1000);
-//                    
-//                    conductive = 1;
-//                    servo_rotate_RC0(180);  // RC0 for Pop Can side
-//                    servo_rotate_RC0(90);
-//                    POPCAN_TAB_count[run_number] += 1;
-//                } 
-//                
-//            }
-//            
-//            if(!conductive){
-//                LATEbits.LATE0 = 1;
-//                LATEbits.LATE1 = 1;
-//                
-//                servo_rotate_RC0(0);
-//                POPCAN_NOTAB_count[run_number] += 1;
-//                servo_rotate_RC0(90);
-//            }
-//            
-//            conductive = 0;
-//            LATEbits.LATE0 = 1;
-//            LATEbits.LATE1 = 1;
-//            
-//        }
+        
         
         else {
             LATAbits.LATA1 = 1; 
-            __delay_ms(700);    
+            __delay_ms(650);    
             LATAbits.LATA1 = 0;
             __delay_ms(1500);  /// WAIT SOME TIME
             LATAbits.LATA0 = 1; 
@@ -536,27 +665,100 @@ void LightSensorRA4_Soup(void){
 
 
 void LightSensorRA5_Pop(void){
-    while(1){
-        if(PORTAbits.RA5 ){//|| PORTAbits.RA4
+    
+    
+    LATEbits.LATE0 = 1;  //RA6 - Push in the solenoid
+    
+    servo_rotate_RC0(90); 
+    
+    run_number = 0;
+    conductive = 0;
+    SOUP_LBL_count[run_number] = 0;
+    SOUP_NOLBL_count[run_number] = 0;
+    POPCAN_TAB_count[run_number] = 0;
+    POPCAN_NOTAB_count[run_number] = 0;
+    TOTAL_CAN_count[run_number] = 0;  
+    
+    while(TOTAL_CAN_count[run_number] < 12){
+        __lcd_home();
+        printf("%x %x %x %x %x", SOUP_LBL_count[run_number], SOUP_NOLBL_count[run_number],  POPCAN_TAB_count[run_number], POPCAN_NOTAB_count[run_number], TOTAL_CAN_count[run_number]);
+        LATEbits.LATE0 = 1;
+        LATEbits.LATE1 = 1;
+        
+        if (PORTAbits.RA5) {
+             TOTAL_CAN_count[run_number] += 1;
+            //RA5 - Sensor on Pop Can sides
+            LATAbits.LATA1 = 0;  // Stop motor
             
-            // LATAbits.LATA1 = 0;
-        } else {      
-            if(PORTAbits.RA5){
-                servo_rotate_RC0(0);
-                servo_rotate_RC0(180);
-                servo_rotate_RC0(90);
-            }       
+            __delay_ms(500);
+            
+            LATEbits.LATE0 = 0;
+            LATEbits.LATE1 = 0;
+            
+            
+            for(int i=0; i<5; i++){
+                readADC(3);     // readADC(3) - RA3 - Pop Can side
+                __lcd_newline();
+                printf("POP: ");
+                __lcd_newline();
+                printf("%x %x       ", ADRESH*256, PORTAbits.RA3);
+                __delay_ms(400);
+                if (ADRESH*256 > 300 && !conductive){
+                    LATEbits.LATE0 = 1;
+                    LATEbits.LATE1 = 1;
+                  
+                    __delay_ms(1000);
+                   
+                    conductive = 1;
+                    while (PORTAbits.RA5) {
+                        servo_rotate_RC0(180);
+                        servo_rotate_RC0(90);
+                    }   
+                      // RC0 for Pop Can side
+                    
+                    POPCAN_TAB_count[run_number] += 1;
+                } 
+                
+            }
+            
+            if(!conductive){
+                LATEbits.LATE0 = 1;
+                LATEbits.LATE1 = 1;
+                
+                while (PORTAbits.RA5) {
+                    servo_rotate_RC0(0);
+                    servo_rotate_RC0(90);
+                }   
+                POPCAN_NOTAB_count[run_number] += 1;
+                
+            }
+            
+            conductive = 0;
+            LATEbits.LATE0 = 1;
+            LATEbits.LATE1 = 1;
+            
+        }
+        
+        
+        else {
+            LATAbits.LATA1 = 1; 
+            __delay_ms(650);    
+            LATAbits.LATA1 = 0;
+            __delay_ms(1500);  /// WAIT SOME TIME
+            LATAbits.LATA0 = 1; 
+            __delay_ms(300); 
+            LATAbits.LATA0 = 0;
+            __delay_ms(1500);
              
-//            else if(PORTAbits.RA4){
-//                if (ADRESH*256 > 299){
-//                    servo_rotate_RC1(180);
-//                } else {
-//                    servo_rotate_RC1(0);
-//                }
-//                servo_rotate_RC1(90);
+//            if(!PORTAbits.RA4 && !PORTAbits.RA5){  // If the sensor still doesn't detect anything
+//                 // GO BACKWARDS
+//                   ///WAIT SOME MORE TIME
 //            }
         }
-    }
+        
+        
+    }    
+    curr_state = OPERATIONEND;
 }
 
 void ADC_RA3(void){
@@ -656,21 +858,29 @@ void servo_rotate_RC0(int degree){
                 __delay_ms(19.6);
             }
             break;
+        case 85:
+            for (int i=0; i<50; i++) {
+                LATCbits.LATC0 = 1;
+                __delay_ms(1.1);
+                LATCbits.LATC0 = 0;
+                __delay_ms(18.9);
+            }
+            break;
         case 90:
             for (int i=0; i<70; i++) {
                 LATCbits.LATC0 = 1;
-                __delay_ms(1.0);
+                __delay_ms(1.2);
                 LATCbits.LATC0 = 0;
-                __delay_ms(19.0);
+                __delay_ms(18.8);
             }
             break;
         case 180:
             //ROTATE LEFT
             for (int i=0; i<50; i++) {
                 LATCbits.LATC0 = 1;
-                __delay_ms(1.4);
+                __delay_ms(1.7);
                 LATCbits.LATC0 = 0;
-                __delay_ms(18.6);
+                __delay_ms(18.3);
             }
             break;
         
@@ -684,17 +894,17 @@ void servo_rotate_RC1(int degree){
             // ROTATE RIGHT
             for (int i=0; i<70; i++) {
                 LATCbits.LATC1 = 1;
-                __delay_ms(0.4);
+                __delay_ms(0.3);
                 LATCbits.LATC1 = 0;
-                __delay_ms(19.6);
+                __delay_ms(19.7);
             }
             break;
         case 90:
             for (int i=0; i<70; i++) {
                 LATCbits.LATC1 = 1;
-                __delay_ms(0.9);
+                __delay_ms(1.0);
                 LATCbits.LATC1 = 0;
-                __delay_ms(19.1);
+                __delay_ms(19.0);
             }
             break;
         case 180:
@@ -730,17 +940,26 @@ void interrupt isr(void){
 //                INT2IE = 1;
 //                TMR0IE = 1;     //Start timer with interrupts
 //                TMR0ON = 1;
-//                TMR0 = 0;
-//                read_time();
-//                start_time[1] = time[1];
-//                start_time[0] = time[0];
-//                
+//                TMR0 = 0;             
 //                canqueue_head = canqueue_tail = 0; //Initiate queue
-//                
-//                __lcd_clear();
-//                can_display_position = -1;
-//                servo_rotate0(90);
-                curr_state = OPERATION;
+                read_time();
+                start_time[1] = time[1];
+                start_time[0] = time[0];
+                __lcd_clear();
+
+                can_display_position = -1;
+                
+                FINALoperation();
+                
+//                servo_rotate_RC1(0);
+//                servo_rotate_RC1(180);
+//                servo_rotate_RC1(90);
+//                LATEbits.LATE0 = 1;
+//                servo_rotate_RC0(0);
+//                servo_rotate_RC0(180);
+//                servo_rotate_RC0(90);
+                
+//                curr_state = OPERATION;
                 break;
             case 31:    //KP_2
                 can_display_position += 1;
@@ -765,23 +984,82 @@ void interrupt isr(void){
                 break;
             case 79:    //KP_4
                 
+               ROTATION_COUNT = 0; 
+               LATEbits.LATE0 = 1; 
                while(1){
-                   LATEbits.LATE0 = 1;
-                   LATEbits.LATE1 = 1;
-                   __delay_ms(500);
-                   LATEbits.LATE0 = 0;
-                   LATEbits.LATE1 = 0;
-                   __delay_ms(1000);
-               } 
-//////         servo_rotate_RC1(int degree)
-                
-                servo_rotate_RC1(0);
-                servo_rotate_RC1(180);
-                servo_rotate_RC1(90);
-                servo_rotate_RC0(0);
-                servo_rotate_RC0(180);
-                servo_rotate_RC0(90);
+                    
+                    
+                    
+               LATCbits.LATC5 = 1; 
+               LATCbits.LATC6 = 0; 
 
+               
+//               
+               
+               switch(ROTATION_COUNT){
+                    case 0:
+                        for (int i=0; i<250; i++) {
+                                LATCbits.LATC7 = 1; 
+                                __delay_ms(15);
+                                LATCbits.LATC7 = 0; 
+                                __delay_ms(5);
+                                if(i == 200){ // Run windmill for 1 second
+                                    LATAbits.LATA1 = 1; 
+                                    LATAbits.LATA0 = 0;
+                                }
+                        }
+                        break;
+                    case 1:
+                        for (int i=0; i<250; i++) {
+                                LATCbits.LATC7 = 1; 
+                                __delay_ms(10);
+                                LATCbits.LATC7 = 0; 
+                                __delay_ms(10);
+                                if(i == 150){
+                                    LATAbits.LATA1 = 0; 
+                                    LATAbits.LATA0 = 0;
+                                }
+                        }
+                        break;
+                    default:
+                        for (int i=0; i<250; i++) {
+                                LATCbits.LATC7 = 1; 
+                                __delay_ms(10);
+                                LATCbits.LATC7 = 0; 
+                                __delay_ms(10);
+//                                if(i == 150){
+//                                    LATAbits.LATA1 = 0; 
+//                                    LATAbits.LATA0 = 0;
+//                                }
+                        }
+                        break;   
+               }          
+               
+              
+                   
+                   
+               __delay_ms(1000);
+               LATCbits.LATC5 = 0; 
+               LATCbits.LATC6 = 1;
+                
+               
+//               LATAbits.LATA1 = 0; 
+//               LATAbits.LATA0 = 1;
+                for (int i=0; i<50; i++) {
+                   LATCbits.LATC7 = 1; 
+                   __delay_ms(8);
+                   LATCbits.LATC7 = 0; 
+                   __delay_ms(12);
+                }
+               
+                LATAbits.LATA1 = 0; 
+                LATAbits.LATA0 = 0;
+                
+                __delay_ms(1000);
+                ROTATION_COUNT += 1; 
+                
+                }
+               
                 //curr_state = OPERATIONEND;
                 break;
             case 207:   //KP_*
@@ -790,7 +1068,16 @@ void interrupt isr(void){
                 TMR1ON = 0;
                 INT1IE = 0;
                 __lcd_clear();
-                curr_state = EMERGENCYSTOP;
+//                servo_rotate_RC0(0);
+//                servo_rotate_RC0(180);
+//                servo_rotate_RC0(90);
+                
+                servo_rotate_RC1(0);
+                servo_rotate_RC1(180);
+                servo_rotate_RC1(90);
+                
+                
+                //curr_state = EMERGENCYSTOP;
                 break;
             case 127:   //KP_B
                 read_time();
@@ -798,10 +1085,7 @@ void interrupt isr(void){
                 start_time[0] = time[0];
                 __lcd_clear();
 
-                can_display_position = -1;
-                
-                
-                
+                can_display_position = -1;       
                 
                 LightSensorRA4_Soup();
                 break;
@@ -812,16 +1096,35 @@ void interrupt isr(void){
                 __lcd_clear();
 
                 can_display_position = -1;
-                curr_state = OPERATION;
-//                LightSensorRA5_Pop();
                 
+                LightSensorRA5_Pop();
+                break;
+            case 255:   //KP_D
+//                
+//                LATCbits.LATC5 = 1; 
+//    LATCbits.LATC6 = 0; 
+//    
+//    for (int i=0; i<250; i++) {
+//        LATCbits.LATC7 = 1; 
+//        __delay_ms(5);
+//        LATCbits.LATC7 = 0; 
+//        __delay_ms(15);
+//        if(i == 225){ // Run windmill for 0.5 second
+//            LATAbits.LATA1 = 1; 
+//            LATAbits.LATA0 = 0;
+//        }
+//    }
+//    
+
+                for (int i=0; i<70; i++) {
+                LATCbits.LATC0 = 1;
+                __delay_ms(1.2);
+                LATCbits.LATC0 = 0;
+                __delay_ms(18.8);
+                }
+         
                 
-                
-//                ADC_RA3();
-                
-//                ADC_RA3();
-//                read_ADC();
-//                servo_rotate0(2);
+//                curr_state = OPERATION;
                 break;
         }
         INT1IF = 0;
@@ -940,21 +1243,6 @@ void DCforwardPWM(void){
     }
 }
 
-//void DC_motor_RA(int pin){
-//    if()
-//            PORTAbits.RA0 = 1;
-//            LATAbits.LATA0 = 1;
-//            PORTAbits.RA1 = 0;
-//            LATAbits.LATA1 = 0;
-//    
-//            PORTAbits.RA1 = 1;
-//            LATAbits.LATA1 = 1;
-//            PORTAbits.RA0 = 0;
-//            LATAbits.LATA0 = 0;
-//        break;
-//    };
-//}
-
 void standby(void){
     getRTC();
     __lcd_home();
@@ -1020,19 +1308,19 @@ void can_count(void){
             __lcd_home();
             printf("Operation Summary");
             __lcd_newline();
-            printf("TOTAL CAN: %d    ", TOTAL_CAN_count);
+            printf("TOTAL CAN: %d    ", TOTAL_CAN_count[1]);
             break;
         case 1:
             __lcd_home();
-            printf("SOUP LBL: %d     ", SOUP_LBL_count);
+            printf("SOUP LBL: %d     ", SOUP_LBL_count[1]);
             __lcd_newline();
-            printf("SOUP NOLBL: %d   ", SOUP_NOLBL_count);
+            printf("SOUP NOLBL: %d   ", SOUP_NOLBL_count[1]);
             break;
         case 2:
             __lcd_home();
-            printf("POPCAN TAB: %d   ", POPCAN_TAB_count);
+            printf("POPCAN TAB: %d   ", POPCAN_TAB_count[1]);
             __lcd_newline();
-            printf("POPCAN NOTAB: %d ", POPCAN_NOTAB_count);
+            printf("POPCAN NOTAB: %d ", POPCAN_NOTAB_count[1]);
             break;
 
         default:
@@ -1046,7 +1334,8 @@ void can_count(void){
 }
 
 void display_log(void){
-    switch(log_position % 3){
+    log_position = log_position % 5;
+    switch(log_position){
         case 0:
 
             //TODOS: REPLACE NUMBERS WITH %d
@@ -1054,22 +1343,22 @@ void display_log(void){
             __lcd_home();
             printf("Run #1           ");
             __lcd_newline();
-            printf("SOUP LBL:  4     ", SOUP_LBL_count);
+            printf("SOUP LBL:  %d     ", SOUP_LBL_count[log_position]);
             keyPressed();   
             __lcd_home();
             printf("Run #1 Time:  %d ", LoggedTimes[0]);
             __lcd_newline();
-            printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count);
+            printf("SOUP NOLBL:  %d   ", SOUP_NOLBL_count[log_position]);
             keyPressed();
             __lcd_home();
             printf("Run #1           ");
             __lcd_newline();
-            printf("POPCAN TAB:  4   ", POPCAN_TAB_count);
+            printf("POPCAN TAB:  %d   ", POPCAN_TAB_count[log_position]);
             keyPressed();  
             __lcd_home();
             printf("Run #1           ");
             __lcd_newline();
-            printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count);
+            printf("POPCAN NOTAB:  %d ", POPCAN_NOTAB_count[log_position]);
             keyPressed();  
             
             log_position = 1;
@@ -1079,22 +1368,22 @@ void display_log(void){
             __lcd_home();
             printf("Run #2           ");
             __lcd_newline();
-            printf("SOUP LBL:  4     ", SOUP_LBL_count);
+            printf("SOUP LBL:  %d     ", SOUP_LBL_count[log_position]);
             keyPressed();   
             __lcd_home();
             printf("Run #2 Time:  %d ", LoggedTimes[1]);
             __lcd_newline();
-            printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count);
+            printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count[log_position]);
             keyPressed();
             __lcd_home();
             printf("Run #2           ");
             __lcd_newline();
-            printf("POPCAN TAB:  4   ", POPCAN_TAB_count);
+            printf("POPCAN TAB:  4   ", POPCAN_TAB_count[log_position]);
             keyPressed();  
             __lcd_home();
             printf("Run #2           ");
             __lcd_newline();
-            printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count);
+            printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count[log_position]);
             keyPressed();  
             
             log_position = 2;
@@ -1103,22 +1392,45 @@ void display_log(void){
             __lcd_home();
             printf("Run #3           ");
             __lcd_newline();
-            printf("SOUP LBL:  4     ", SOUP_LBL_count);
+            printf("SOUP LBL:  4     ", SOUP_LBL_count[log_position]);
             keyPressed();   
             __lcd_home();
             printf("Run #3 Time:  %d ", LoggedTimes[2]);
             __lcd_newline();
-            printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count);
+            printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count[log_position]);
             keyPressed();
             __lcd_home();
             printf("Run #3           ");
             __lcd_newline();
-            printf("POPCAN TAB:  4   ", POPCAN_TAB_count);
+            printf("POPCAN TAB:  4   ", POPCAN_TAB_count[log_position]);
             keyPressed();  
             __lcd_home();
             printf("Run #3           ");
             __lcd_newline();
-            printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count);
+            printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count[log_position]);
+            keyPressed();  
+            log_position = 0;
+            break;// Cycle back to start
+         case 3:
+            __lcd_home();
+            printf("Run #4           ");
+            __lcd_newline();
+            printf("SOUP LBL:  4     ", SOUP_LBL_count[log_position]);
+            keyPressed();   
+            __lcd_home();
+            printf("Run #3 Time:  %d ", LoggedTimes[2]);
+            __lcd_newline();
+            printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count[log_position]);
+            keyPressed();
+            __lcd_home();
+            printf("Run #4           ");
+            __lcd_newline();
+            printf("POPCAN TAB:  4   ", POPCAN_TAB_count[log_position]);
+            keyPressed();  
+            __lcd_home();
+            printf("Run #3           ");
+            __lcd_newline();
+            printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count[log_position]);
             keyPressed();  
             log_position = 0;
             break;// Cycle back to start
@@ -1169,7 +1481,10 @@ void operation(void){
         __delay_ms(1000);  
         read_time();
         
-        curr_time = 60*dec_to_hex(time[1])+dec_to_hex(time[0]);
+                current_time[1] = time[1];
+                current_time[0] = time[0];
+        
+        curr_time = 60*dec_to_hex(current_time[1])+dec_to_hex(current_time[0]);
         
         minutes_difference = time[1] - start_time[1];
         
@@ -1382,187 +1697,6 @@ void set_external_interrupt2(float time) {
 //	return;
 //}
 //
-
-#define SERVO_LAT LATCbits.LC0
-
-void servo_ISR(void) {
-
-	TMR1IF = 0; //clear_interrupt(timer1);
-    TMR1IE = 0; // disable timer1 interrupts
-    TMR1ON = 0; // turn timer1 off
-    
-
-	if (servo_current_state == SERVO_UP) {
-		set_external_interrupt1(servo_down_period);
-		servo_current_state = SERVO_DOWN;
-		SERVO_LAT = 0;
-	}
-	else if (servo_current_state == SERVO_DOWN) {
-		set_external_interrupt1(servo_up_period);
-		servo_current_state = SERVO_UP;
-		SERVO_LAT = 1;
-	}
-
- 
-	return;
-}
-
-//
-//#define SERVO_UPSCALE 1.25
-//#define SERVO_UPTIME 0.25
-//#define SERVO_DOWNTIME 20
-//#define AA 0
-//#define C 0.33
-//#define NINEV 0.67
-//#define DEAD 0.99
-//#define SERVO_UP 1
-//#define SERVO_DOWN 0
-
-void update_servo_position(float bat_type) {
-	// updates up and down period, which is used to drive the servo_IRQ
-    extern volatile float servo_up_period;
-    extern volatile float servo_down_period;
-
-	servo_up_period = SERVO_UPTIME + SERVO_UPSCALE * bat_type;
-	servo_down_period = SERVO_DOWNTIME;
-	return;
-}
-
-int stepper_state;
-#define STEPPER_LAT1 LATAbits.LA0
-#define STEPPER_LAT2 LATAbits.LA1
-#define STEPPER_LAT3 LATAbits.LA2
-#define STEPPER_LAT4 LATAbits.LA3
-
-void stepper_rotate(void){
-    unsigned int i;
-    unsigned int j;
-    unsigned long duty = 500;
-
-    for (i=0; i<180; i++) {
-        STEPPER_LAT1 = 1;
-        STEPPER_LAT2 = 0;
-        STEPPER_LAT3 = 0;
-        STEPPER_LAT4 = 0;
-        
-        __delay_ms(10);
-        
-        STEPPER_LAT1 = 0;
-        STEPPER_LAT2 = 1;
-        STEPPER_LAT3 = 0;
-        STEPPER_LAT4 = 0;
-        
-        __delay_ms(10);
-        
-        STEPPER_LAT1 = 0;
-        STEPPER_LAT2 = 0;
-        STEPPER_LAT3 = 1;
-        STEPPER_LAT4 = 0;
-        __delay_ms(10);
-        
-        STEPPER_LAT1 = 0;
-        STEPPER_LAT2 = 0;
-        STEPPER_LAT3 = 0;
-        STEPPER_LAT4 = 1;
-        __delay_ms(10);
-        
-    }
-    
-    return;
-}
-
-//
-//
-//void stepper_ISR(void){ 
-//    
-//    TMR0IF = 0; //clear_interrupt(timer1);
-//    TMR0IE = 0; // disable timer1 interrupts
-//    TMR0ON = 0;
-//           
-//    stepper_state = 1;
-//    switch(stepper_state){
-//            case 1:
-//                STEPPER_LAT1 = 1;
-//                STEPPER_LAT2 = 0;
-//                STEPPER_LAT3 = 0;
-//                STEPPER_LAT4 = 0;
-//                break;
-//            case 2:
-//                STEPPER_LAT1 = 0;
-//                STEPPER_LAT2 = 1;
-//                STEPPER_LAT3 = 0;
-//                STEPPER_LAT4 = 0;
-//                break;
-//            case 3:
-//                STEPPER_LAT1 = 0;
-//                STEPPER_LAT2 = 0;
-//                STEPPER_LAT3 = 1;
-//                STEPPER_LAT4 = 0;
-//                break;
-//            case 4:
-//                STEPPER_LAT1 = 0;
-//                STEPPER_LAT2 = 0;
-//                STEPPER_LAT3 = 0;
-//                STEPPER_LAT4 = 1;
-//                break;
-//    }
-//    stepper_state += 1;
-//    stepper_state = stepper_state % 4;
-//    set_external_interrupt0(50);
-////    stepper_delay();
-//}
-
-
-//#define STEPPER_PERIOD 20;
-//
-//
-//void stepper_ISR() {
-//    extern volatile unsigned char belt_pin_num;
-//    extern volatile unsigned char belt_angle_count;
-//    extern volatile unsigned char rotary_pin_num;
-//    extern volatile unsigned char rotary_angle_count;
-//	TMR0IF = 0; //clear_interrupt(timer3);
-//    TMR0IE = 0; // disable timer3 interrupts
-//    TMR0ON = 0; // turn timer3 off
-//    
-//    if (belt_angle_count > 0){
-//        switch(belt_pin_num) {
-//           case 0:
-//               STEPPER_LAT1=1;
-//               STEPPER_LAT2=0;
-//               STEPPER_LAT3=0;
-//               STEPPER_LAT4=0;
-//               break;
-//           case 1:
-//               STEPPER_LAT1=0;
-//               STEPPER_LAT2=1;
-//               STEPPER_LAT3=0;
-//               STEPPER_LAT4=0;
-//               break;
-//           case 2:
-//               STEPPER_LAT1=0;
-//               STEPPER_LAT2=0;
-//               STEPPER_LAT3=1;
-//               STEPPER_LAT4=0;
-//               break;
-//           case 3:
-//               STEPPER_LAT1=0;
-//               STEPPER_LAT2=0;
-//               STEPPER_LAT3=0;
-//               STEPPER_LAT4=1;
-//               break;
-////            default:
-////                whoops(10);
-//       }
-//        
-//        
-////        belt_pin_num = belt_pin_num == 3 ? 0 : belt_pin_num+1;
-////        belt_angle_count = belt_angle_count == BELT_STEPPER_COUNT+1 ? 0 : belt_angle_count+1;
-//    }
-//    
-//    set_external_interrupt0(STEPPER_PERIOD);
-//	return;
-//}
 
 
 

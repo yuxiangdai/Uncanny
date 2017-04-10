@@ -3997,6 +3997,9 @@ void DCforwardPWM(void);
 unsigned char time[7];
 unsigned char start_time[2];
 unsigned char end_time[2];
+
+unsigned char current_time[2];
+
 int stime;
 int etime;
 int operation_time;
@@ -4011,6 +4014,8 @@ int TOTAL_CAN_count[4] = {0,0,0,0};
 
 int degree = 0;
 
+int ROTATION_COUNT;
+
 int high = 0;
 int DC_motor_direction = 0;
 
@@ -4023,6 +4028,8 @@ int minutes_difference;
 int start_minutes;
 int start_seconds;
 
+int OPERATION_TIME_COUNTER;
+
 int LoggedTimes[4] = {0,0,0, 0};
 int TempTimes[4] = {0,0,0, 0};
 
@@ -4030,7 +4037,7 @@ int operation_disp = 0;
 
 unsigned char keypress = (0);
 
-# 150
+# 157
 int canqueue[11];
 int canqueue_tail;
 int canqueue_head;
@@ -4043,16 +4050,16 @@ OSCCON = 0xF2;
 
 OSCTUNEbits.PLLEN = 1;
 
-# 167
+# 174
 TRISA = 0b00111100;
 
-# 181
+# 188
 TRISB = 0b11111111;
 
-# 187
+# 194
 TRISC = 0x00;
 
-# 195
+# 202
 TRISD = 0x00;
 
 
@@ -4118,7 +4125,7 @@ TMR0ON=0;
 TMR0IE=0;
 TMR0IF=0;
 
-# 266
+# 273
 T0PS0=1;
 T0PS1=1;
 T0PS2=1;
@@ -4148,7 +4155,7 @@ TMR1ON=0;
 TMR1IE = 0;
 TMR1IF=0;
 
-# 301
+# 308
 T2CON = 0b01111010;
 
 PR2 = 0b10011100;
@@ -4192,7 +4199,7 @@ while(ADCON0bits.GO_NOT_DONE){_delay((unsigned long)((5)*(10000000/4000.0)));}
 void main(void) {
 
 initialize();
-update_servo_position(0.33);
+
 set_external_interrupt1(servo_down_period);
 
 TMR1IE = 0;
@@ -4237,35 +4244,181 @@ LATEbits.LATE0 = 1;
 servo_rotate_RC0(90);
 servo_rotate_RC1(90);
 
-if(PORTAbits.RA4 ){
+run_number = 0;
+conductive = 0;
+SOUP_LBL_count[run_number] = 0;
+SOUP_NOLBL_count[run_number] = 0;
+POPCAN_TAB_count[run_number] = 0;
+POPCAN_NOTAB_count[run_number] = 0;
+TOTAL_CAN_count[run_number] = 0;
+OPERATION_TIME_COUNTER = 0;
 
+# 409
+ROTATION_COUNT = 0;
+
+LATCbits.LATC5 = 1;
+LATCbits.LATC6 = 0;
+
+for (int i=0; i<250; i++) {
+LATCbits.LATC7 = 1;
+_delay((unsigned long)((5)*(10000000/4000.0)));
+LATCbits.LATC7 = 0;
+_delay((unsigned long)((15)*(10000000/4000.0)));
+if(i == 225){
+LATAbits.LATA1 = 1;
+LATAbits.LATA0 = 0;
+}
+}
 
 LATAbits.LATA1 = 0;
+LATAbits.LATA0 = 0;
+
+ROTATION_COUNT += 1;
+
+# 436
+while(TOTAL_CAN_count[run_number] < 12 && OPERATION_TIME_COUNTER < 180){
+if(PORTAbits.RA4){
+LATAbits.LATA1 = 0;
+TOTAL_CAN_count[run_number] += 1;
+
+_delay((unsigned long)((500)*(10000000/4000.0)));
+
+for(int i=0; i<5; i++){
 readADC(2);
+lcdInst(0b11000000);
+printf("ADRESH %x ", ADRESH*256);
+lcdInst(0b11000000);
 
-if (ADRESH*256 > 299){
+if (ADRESH*256 > 100){
+LATEbits.LATE0 = 0;
+LATEbits.LATE1 = 0;
+conductive = 1;
+while(PORTAbits.RA4){
 servo_rotate_RC1(180);
+}
+SOUP_LBL_count[run_number] += 1;
+}
+_delay((unsigned long)((500)*(10000000/4000.0)));
+}
 
-} else {
+if (!conductive){
+LATEbits.LATE0 = 0;
+LATEbits.LATE1 = 0;
+while(PORTAbits.RA4){
 servo_rotate_RC1(0);
 }
-servo_rotate_RC1(90);
+SOUP_NOLBL_count[run_number] += 1;
+}
 
-} else {
+
+servo_rotate_RC1(90);
+conductive = 0;
+
+LATEbits.LATE0 = 1;
+LATEbits.LATE1 = 1;
+
+}
+else if (PORTAbits.RA5) {
+TOTAL_CAN_count[run_number] += 1;
+
+LATAbits.LATA1 = 0;
+
+_delay((unsigned long)((500)*(10000000/4000.0)));
+servo_rotate_RC0(85);
+
+LATEbits.LATE0 = 0;
+
+
+for(int i=0; i<5; i++){
+readADC(3);
+lcdInst(0b11000000);
+printf("POP: ");
+lcdInst(0b11000000);
+printf("%x %x       ", ADRESH*256, PORTAbits.RA3);
+_delay((unsigned long)((400)*(10000000/4000.0)));
+if (ADRESH*256 > 300 && !conductive){
+LATEbits.LATE0 = 1;
+LATEbits.LATE1 = 1;
+
+_delay((unsigned long)((1000)*(10000000/4000.0)));
+
+conductive = 1;
+while (PORTAbits.RA5) {
+servo_rotate_RC0(180);
+servo_rotate_RC0(90);
+}
+
+
+POPCAN_TAB_count[run_number] += 1;
+}
+
+}
+
+if(!conductive){
+LATEbits.LATE0 = 1;
+LATEbits.LATE1 = 1;
+
+while (PORTAbits.RA5) {
+servo_rotate_RC0(0);
+servo_rotate_RC0(90);
+}
+POPCAN_NOTAB_count[run_number] += 1;
+
+}
+
+conductive = 0;
+LATEbits.LATE0 = 1;
+LATEbits.LATE1 = 1;
+
+}
+
+else {
+
+# 538
+LATCbits.LATC5 = 1;
+LATCbits.LATC6 = 0;
+
+for (int i=0; i<250; i++) {
+LATCbits.LATC7 = 1;
+_delay((unsigned long)((7)*(10000000/4000.0)));
+LATCbits.LATC7 = 0;
+_delay((unsigned long)((13)*(10000000/4000.0)));
+if(i == 225){
+LATAbits.LATA1 = 1;
+LATAbits.LATA0 = 0;
+}
+}
+
+LATAbits.LATA1 = 0;
+LATAbits.LATA0 = 0;
+
+ROTATION_COUNT += 1;
+
+# 561
 LATAbits.LATA1 = 1;
 _delay((unsigned long)((500)*(10000000/4000.0)));
 LATAbits.LATA1 = 0;
-_delay((unsigned long)((1000)*(10000000/4000.0)));
+_delay((unsigned long)((1500)*(10000000/4000.0)));
+LATAbits.LATA0 = 1;
+_delay((unsigned long)((300)*(10000000/4000.0)));
+LATAbits.LATA0 = 0;
+_delay((unsigned long)((1500)*(10000000/4000.0)));
+
+
+OPERATION_TIME_COUNTER += 3.95;
+
 }
+}
+
+curr_state = OPERATIONEND;
 
 }
 
 void LightSensorRA4_Soup(void){
-LATEbits.LATE0 = 1;
-LATEbits.LATE1 = 1;
-servo_rotate_RC0(90);
-_delay((unsigned long)((100)*(10000000/4000.0)));
+
 servo_rotate_RC1(90);
+LATEbits.LATE0 = 1;
+
 run_number = 0;
 conductive = 0;
 SOUP_LBL_count[run_number] = 0;
@@ -4295,23 +4448,29 @@ lcdInst(0b11000000);
 
 if (ADRESH*256 > 100){
 LATEbits.LATE0 = 0;
-LATEbits.LATE1 = 0;
 conductive = 1;
+while(PORTAbits.RA4){
 servo_rotate_RC1(180);
+servo_rotate_RC1(90);
+}
+
 SOUP_LBL_count[run_number] += 1;
 }
-_delay((unsigned long)((500)*(10000000/4000.0)));
+_delay((unsigned long)((300)*(10000000/4000.0)));
 }
 
 if (!conductive){
 LATEbits.LATE0 = 0;
-LATEbits.LATE1 = 0;
+
+while(PORTAbits.RA4){
 servo_rotate_RC1(0);
+servo_rotate_RC1(90);
+}
 SOUP_NOLBL_count[run_number] += 1;
 }
 
 
-servo_rotate_RC1(90);
+
 conductive = 0;
 
 LATEbits.LATE0 = 1;
@@ -4319,10 +4478,10 @@ LATEbits.LATE1 = 1;
 
 }
 
-# 516
+
 else {
 LATAbits.LATA1 = 1;
-_delay((unsigned long)((700)*(10000000/4000.0)));
+_delay((unsigned long)((650)*(10000000/4000.0)));
 LATAbits.LATA1 = 0;
 _delay((unsigned long)((1500)*(10000000/4000.0)));
 LATAbits.LATA0 = 1;
@@ -4330,7 +4489,7 @@ _delay((unsigned long)((300)*(10000000/4000.0)));
 LATAbits.LATA0 = 0;
 _delay((unsigned long)((1500)*(10000000/4000.0)));
 
-# 530
+# 659
 }
 
 
@@ -4340,20 +4499,97 @@ curr_state = OPERATIONEND;
 
 
 void LightSensorRA5_Pop(void){
-while(1){
-if(PORTAbits.RA5 ){
 
 
-} else {
-if(PORTAbits.RA5){
-servo_rotate_RC0(0);
+LATEbits.LATE0 = 1;
+
+servo_rotate_RC0(90);
+
+run_number = 0;
+conductive = 0;
+SOUP_LBL_count[run_number] = 0;
+SOUP_NOLBL_count[run_number] = 0;
+POPCAN_TAB_count[run_number] = 0;
+POPCAN_NOTAB_count[run_number] = 0;
+TOTAL_CAN_count[run_number] = 0;
+
+while(TOTAL_CAN_count[run_number] < 12){
+lcdInst(0b10000000);
+printf("%x %x %x %x %x", SOUP_LBL_count[run_number], SOUP_NOLBL_count[run_number], POPCAN_TAB_count[run_number], POPCAN_NOTAB_count[run_number], TOTAL_CAN_count[run_number]);
+LATEbits.LATE0 = 1;
+LATEbits.LATE1 = 1;
+
+if (PORTAbits.RA5) {
+TOTAL_CAN_count[run_number] += 1;
+
+LATAbits.LATA1 = 0;
+
+_delay((unsigned long)((500)*(10000000/4000.0)));
+
+LATEbits.LATE0 = 0;
+LATEbits.LATE1 = 0;
+
+
+for(int i=0; i<5; i++){
+readADC(3);
+lcdInst(0b11000000);
+printf("POP: ");
+lcdInst(0b11000000);
+printf("%x %x       ", ADRESH*256, PORTAbits.RA3);
+_delay((unsigned long)((400)*(10000000/4000.0)));
+if (ADRESH*256 > 300 && !conductive){
+LATEbits.LATE0 = 1;
+LATEbits.LATE1 = 1;
+
+_delay((unsigned long)((1000)*(10000000/4000.0)));
+
+conductive = 1;
+while (PORTAbits.RA5) {
 servo_rotate_RC0(180);
 servo_rotate_RC0(90);
 }
 
-# 558
+
+POPCAN_TAB_count[run_number] += 1;
 }
+
 }
+
+if(!conductive){
+LATEbits.LATE0 = 1;
+LATEbits.LATE1 = 1;
+
+while (PORTAbits.RA5) {
+servo_rotate_RC0(0);
+servo_rotate_RC0(90);
+}
+POPCAN_NOTAB_count[run_number] += 1;
+
+}
+
+conductive = 0;
+LATEbits.LATE0 = 1;
+LATEbits.LATE1 = 1;
+
+}
+
+
+else {
+LATAbits.LATA1 = 1;
+_delay((unsigned long)((650)*(10000000/4000.0)));
+LATAbits.LATA1 = 0;
+_delay((unsigned long)((1500)*(10000000/4000.0)));
+LATAbits.LATA0 = 1;
+_delay((unsigned long)((300)*(10000000/4000.0)));
+LATAbits.LATA0 = 0;
+_delay((unsigned long)((1500)*(10000000/4000.0)));
+
+# 757
+}
+
+
+}
+curr_state = OPERATIONEND;
 }
 
 void ADC_RA3(void){
@@ -4371,7 +4607,7 @@ servo_rotate_RC1(0);
 
 servo_rotate_RC1(90);
 
-# 583
+# 785
 readADC(3);
 printf("%x %x", ADRESH*256,ADRESL);
 
@@ -4448,21 +4684,29 @@ LATCbits.LATC0 = 0;
 _delay((unsigned long)((19.6)*(10000000/4000.0)));
 }
 break;
+case 85:
+for (int i=0; i<50; i++) {
+LATCbits.LATC0 = 1;
+_delay((unsigned long)((1.1)*(10000000/4000.0)));
+LATCbits.LATC0 = 0;
+_delay((unsigned long)((18.9)*(10000000/4000.0)));
+}
+break;
 case 90:
 for (int i=0; i<70; i++) {
 LATCbits.LATC0 = 1;
-_delay((unsigned long)((1.0)*(10000000/4000.0)));
+_delay((unsigned long)((1.2)*(10000000/4000.0)));
 LATCbits.LATC0 = 0;
-_delay((unsigned long)((19.0)*(10000000/4000.0)));
+_delay((unsigned long)((18.8)*(10000000/4000.0)));
 }
 break;
 case 180:
 
 for (int i=0; i<50; i++) {
 LATCbits.LATC0 = 1;
-_delay((unsigned long)((1.4)*(10000000/4000.0)));
+_delay((unsigned long)((1.7)*(10000000/4000.0)));
 LATCbits.LATC0 = 0;
-_delay((unsigned long)((18.6)*(10000000/4000.0)));
+_delay((unsigned long)((18.3)*(10000000/4000.0)));
 }
 break;
 
@@ -4476,17 +4720,17 @@ case 0:
 
 for (int i=0; i<70; i++) {
 LATCbits.LATC1 = 1;
-_delay((unsigned long)((0.4)*(10000000/4000.0)));
+_delay((unsigned long)((0.3)*(10000000/4000.0)));
 LATCbits.LATC1 = 0;
-_delay((unsigned long)((19.6)*(10000000/4000.0)));
+_delay((unsigned long)((19.7)*(10000000/4000.0)));
 }
 break;
 case 90:
 for (int i=0; i<70; i++) {
 LATCbits.LATC1 = 1;
-_delay((unsigned long)((0.9)*(10000000/4000.0)));
+_delay((unsigned long)((1.0)*(10000000/4000.0)));
 LATCbits.LATC1 = 0;
-_delay((unsigned long)((19.1)*(10000000/4000.0)));
+_delay((unsigned long)((19.0)*(10000000/4000.0)));
 }
 break;
 case 180:
@@ -4519,8 +4763,17 @@ curr_state = LOGS;
 break;
 case 15:
 
-# 743
-curr_state = OPERATION;
+# 945
+read_time();
+start_time[1] = time[1];
+start_time[0] = time[0];
+lcdInst(0b00000001);
+
+can_display_position = -1;
+
+FINALoperation();
+
+# 963
 break;
 case 31:
 can_display_position += 1;
@@ -4530,7 +4783,7 @@ break;
 case 47:
 operation_time = etime - stime;
 
-# 759
+# 978
 can_display_position = -1;
 curr_state = CANTIME;
 break;
@@ -4540,22 +4793,81 @@ curr_state = STANDBY;
 break;
 case 79:
 
-while(1){
+ROTATION_COUNT = 0;
 LATEbits.LATE0 = 1;
-LATEbits.LATE1 = 1;
-_delay((unsigned long)((500)*(10000000/4000.0)));
-LATEbits.LATE0 = 0;
-LATEbits.LATE1 = 0;
-_delay((unsigned long)((1000)*(10000000/4000.0)));
+while(1){
+
+
+
+LATCbits.LATC5 = 1;
+LATCbits.LATC6 = 0;
+
+
+
+
+switch(ROTATION_COUNT){
+case 0:
+for (int i=0; i<250; i++) {
+LATCbits.LATC7 = 1;
+_delay((unsigned long)((15)*(10000000/4000.0)));
+LATCbits.LATC7 = 0;
+_delay((unsigned long)((5)*(10000000/4000.0)));
+if(i == 200){
+LATAbits.LATA1 = 1;
+LATAbits.LATA0 = 0;
+}
+}
+break;
+case 1:
+for (int i=0; i<250; i++) {
+LATCbits.LATC7 = 1;
+_delay((unsigned long)((10)*(10000000/4000.0)));
+LATCbits.LATC7 = 0;
+_delay((unsigned long)((10)*(10000000/4000.0)));
+if(i == 150){
+LATAbits.LATA1 = 0;
+LATAbits.LATA0 = 0;
+}
+}
+break;
+default:
+for (int i=0; i<250; i++) {
+LATCbits.LATC7 = 1;
+_delay((unsigned long)((10)*(10000000/4000.0)));
+LATCbits.LATC7 = 0;
+_delay((unsigned long)((10)*(10000000/4000.0)));
+
+
+
+
+}
+break;
 }
 
 
-servo_rotate_RC1(0);
-servo_rotate_RC1(180);
-servo_rotate_RC1(90);
-servo_rotate_RC0(0);
-servo_rotate_RC0(180);
-servo_rotate_RC0(90);
+
+
+_delay((unsigned long)((1000)*(10000000/4000.0)));
+LATCbits.LATC5 = 0;
+LATCbits.LATC6 = 1;
+
+
+
+
+for (int i=0; i<50; i++) {
+LATCbits.LATC7 = 1;
+_delay((unsigned long)((8)*(10000000/4000.0)));
+LATCbits.LATC7 = 0;
+_delay((unsigned long)((12)*(10000000/4000.0)));
+}
+
+LATAbits.LATA1 = 0;
+LATAbits.LATA0 = 0;
+
+_delay((unsigned long)((1000)*(10000000/4000.0)));
+ROTATION_COUNT += 1;
+
+}
 
 
 break;
@@ -4565,7 +4877,16 @@ LATAbits.LATA2 = 0;
 TMR1ON = 0;
 INT1IE = 0;
 lcdInst(0b00000001);
-curr_state = EMERGENCYSTOP;
+
+
+
+
+servo_rotate_RC1(0);
+servo_rotate_RC1(180);
+servo_rotate_RC1(90);
+
+
+
 break;
 case 127:
 read_time();
@@ -4574,9 +4895,6 @@ start_time[0] = time[0];
 lcdInst(0b00000001);
 
 can_display_position = -1;
-
-
-
 
 LightSensorRA4_Soup();
 break;
@@ -4587,15 +4905,27 @@ start_time[0] = time[0];
 lcdInst(0b00000001);
 
 can_display_position = -1;
-curr_state = OPERATION;
 
-# 825
+LightSensorRA5_Pop();
+break;
+case 255:
+
+# 1119
+for (int i=0; i<70; i++) {
+LATCbits.LATC0 = 1;
+_delay((unsigned long)((1.2)*(10000000/4000.0)));
+LATCbits.LATC0 = 0;
+_delay((unsigned long)((18.8)*(10000000/4000.0)));
+}
+
+
+
 break;
 }
 INT1IF = 0;
 }
 
-# 845
+# 1148
 else if (INT0IF){
 if(PORTAbits.RA0){
 ADC_RA3();
@@ -4640,7 +4970,7 @@ break;
 INT2IF = 0;
 }
 
-# 904
+# 1207
 else{
 while(1){
 lcdInst(0b10000000);
@@ -4680,14 +5010,13 @@ LATAbits.LATA1 = 0;
 }
 }
 
-# 958
 void standby(void){
 getRTC();
 lcdInst(0b10000000);
 
 printf("%02x/%02x %02x:%02x:%02x", time[5],time[4],time[2],time[1],time[0]);
 
-# 969
+# 1257
 lcdInst(0b11000000);
 printf("DEBUGPORTB: %d ", PORTB);
 return;
@@ -4742,19 +5071,19 @@ case 0:
 lcdInst(0b10000000);
 printf("Operation Summary");
 lcdInst(0b11000000);
-printf("TOTAL CAN: %d    ", TOTAL_CAN_count);
+printf("TOTAL CAN: %d    ", TOTAL_CAN_count[1]);
 break;
 case 1:
 lcdInst(0b10000000);
-printf("SOUP LBL: %d     ", SOUP_LBL_count);
+printf("SOUP LBL: %d     ", SOUP_LBL_count[1]);
 lcdInst(0b11000000);
-printf("SOUP NOLBL: %d   ", SOUP_NOLBL_count);
+printf("SOUP NOLBL: %d   ", SOUP_NOLBL_count[1]);
 break;
 case 2:
 lcdInst(0b10000000);
-printf("POPCAN TAB: %d   ", POPCAN_TAB_count);
+printf("POPCAN TAB: %d   ", POPCAN_TAB_count[1]);
 lcdInst(0b11000000);
-printf("POPCAN NOTAB: %d ", POPCAN_NOTAB_count);
+printf("POPCAN NOTAB: %d ", POPCAN_NOTAB_count[1]);
 break;
 
 default:
@@ -4768,7 +5097,8 @@ return;
 }
 
 void display_log(void){
-switch(log_position % 3){
+log_position = log_position % 5;
+switch(log_position){
 case 0:
 
 
@@ -4776,22 +5106,22 @@ case 0:
 lcdInst(0b10000000);
 printf("Run #1           ");
 lcdInst(0b11000000);
-printf("SOUP LBL:  4     ", SOUP_LBL_count);
+printf("SOUP LBL:  %d     ", SOUP_LBL_count[log_position]);
 keyPressed();
 lcdInst(0b10000000);
 printf("Run #1 Time:  %d ", LoggedTimes[0]);
 lcdInst(0b11000000);
-printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count);
+printf("SOUP NOLBL:  %d   ", SOUP_NOLBL_count[log_position]);
 keyPressed();
 lcdInst(0b10000000);
 printf("Run #1           ");
 lcdInst(0b11000000);
-printf("POPCAN TAB:  4   ", POPCAN_TAB_count);
+printf("POPCAN TAB:  %d   ", POPCAN_TAB_count[log_position]);
 keyPressed();
 lcdInst(0b10000000);
 printf("Run #1           ");
 lcdInst(0b11000000);
-printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count);
+printf("POPCAN NOTAB:  %d ", POPCAN_NOTAB_count[log_position]);
 keyPressed();
 
 log_position = 1;
@@ -4801,22 +5131,22 @@ case 1:
 lcdInst(0b10000000);
 printf("Run #2           ");
 lcdInst(0b11000000);
-printf("SOUP LBL:  4     ", SOUP_LBL_count);
+printf("SOUP LBL:  %d     ", SOUP_LBL_count[log_position]);
 keyPressed();
 lcdInst(0b10000000);
 printf("Run #2 Time:  %d ", LoggedTimes[1]);
 lcdInst(0b11000000);
-printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count);
+printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count[log_position]);
 keyPressed();
 lcdInst(0b10000000);
 printf("Run #2           ");
 lcdInst(0b11000000);
-printf("POPCAN TAB:  4   ", POPCAN_TAB_count);
+printf("POPCAN TAB:  4   ", POPCAN_TAB_count[log_position]);
 keyPressed();
 lcdInst(0b10000000);
 printf("Run #2           ");
 lcdInst(0b11000000);
-printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count);
+printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count[log_position]);
 keyPressed();
 
 log_position = 2;
@@ -4825,22 +5155,45 @@ case 2:
 lcdInst(0b10000000);
 printf("Run #3           ");
 lcdInst(0b11000000);
-printf("SOUP LBL:  4     ", SOUP_LBL_count);
+printf("SOUP LBL:  4     ", SOUP_LBL_count[log_position]);
 keyPressed();
 lcdInst(0b10000000);
 printf("Run #3 Time:  %d ", LoggedTimes[2]);
 lcdInst(0b11000000);
-printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count);
+printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count[log_position]);
 keyPressed();
 lcdInst(0b10000000);
 printf("Run #3           ");
 lcdInst(0b11000000);
-printf("POPCAN TAB:  4   ", POPCAN_TAB_count);
+printf("POPCAN TAB:  4   ", POPCAN_TAB_count[log_position]);
 keyPressed();
 lcdInst(0b10000000);
 printf("Run #3           ");
 lcdInst(0b11000000);
-printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count);
+printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count[log_position]);
+keyPressed();
+log_position = 0;
+break;
+case 3:
+lcdInst(0b10000000);
+printf("Run #4           ");
+lcdInst(0b11000000);
+printf("SOUP LBL:  4     ", SOUP_LBL_count[log_position]);
+keyPressed();
+lcdInst(0b10000000);
+printf("Run #3 Time:  %d ", LoggedTimes[2]);
+lcdInst(0b11000000);
+printf("SOUP NOLBL:  4   ", SOUP_NOLBL_count[log_position]);
+keyPressed();
+lcdInst(0b10000000);
+printf("Run #4           ");
+lcdInst(0b11000000);
+printf("POPCAN TAB:  4   ", POPCAN_TAB_count[log_position]);
+keyPressed();
+lcdInst(0b10000000);
+printf("Run #3           ");
+lcdInst(0b11000000);
+printf("POPCAN NOTAB:  4 ", POPCAN_NOTAB_count[log_position]);
 keyPressed();
 log_position = 0;
 break;
@@ -4878,7 +5231,7 @@ start_minutes = start_time[1];
 start_seconds = start_time[0];
 time_diff = 0;
 
-# 1163
+# 1475
 begin_time = 60*dec_to_hex(start_time[1])+dec_to_hex(start_time[0]);
 
 lcdInst(0b11000000);
@@ -4888,7 +5241,10 @@ while(1){
 _delay((unsigned long)((1000)*(10000000/4000.0)));
 read_time();
 
-curr_time = 60*dec_to_hex(time[1])+dec_to_hex(time[0]);
+current_time[1] = time[1];
+current_time[0] = time[0];
+
+curr_time = 60*dec_to_hex(current_time[1])+dec_to_hex(current_time[0]);
 
 minutes_difference = time[1] - start_time[1];
 
@@ -4907,7 +5263,7 @@ curr_state = OPERATIONEND;
 }
 }
 
-# 1223
+# 1538
 return;
 }
 
@@ -5018,7 +5374,7 @@ for(char i=0;i<100;i++){_delay((unsigned long)((10)*(10000000/4000.0)));};
 return;
 }
 
-# 1337
+# 1652
 void set_external_interrupt0(float time) {
 
 
@@ -5056,81 +5412,7 @@ TMR2ON = 1;
 return;
 }
 
-# 1388
-void servo_ISR(void) {
-
-TMR1IF = 0;
-TMR1IE = 0;
-TMR1ON = 0;
-
-
-if (servo_current_state == 1) {
-set_external_interrupt1(servo_down_period);
-servo_current_state = 0;
-LATCbits.LC0 = 0;
-}
-else if (servo_current_state == 0) {
-set_external_interrupt1(servo_up_period);
-servo_current_state = 1;
-LATCbits.LC0 = 1;
-}
-
-
-return;
-}
-
-# 1421
-void update_servo_position(float bat_type) {
-
-extern volatile float servo_up_period;
-extern volatile float servo_down_period;
-
-servo_up_period = 0.25 + 1.25 * bat_type;
-servo_down_period = 20;
-return;
-}
-
-int stepper_state;
-
-# 1437
-void stepper_rotate(void){
-unsigned int i;
-unsigned int j;
-unsigned long duty = 500;
-
-for (i=0; i<180; i++) {
-LATAbits.LA0 = 1;
-LATAbits.LA1 = 0;
-LATAbits.LA2 = 0;
-LATAbits.LA3 = 0;
-
-_delay((unsigned long)((10)*(10000000/4000.0)));
-
-LATAbits.LA0 = 0;
-LATAbits.LA1 = 1;
-LATAbits.LA2 = 0;
-LATAbits.LA3 = 0;
-
-_delay((unsigned long)((10)*(10000000/4000.0)));
-
-LATAbits.LA0 = 0;
-LATAbits.LA1 = 0;
-LATAbits.LA2 = 1;
-LATAbits.LA3 = 0;
-_delay((unsigned long)((10)*(10000000/4000.0)));
-
-LATAbits.LA0 = 0;
-LATAbits.LA1 = 0;
-LATAbits.LA2 = 0;
-LATAbits.LA3 = 1;
-_delay((unsigned long)((10)*(10000000/4000.0)));
-
-}
-
-return;
-}
-
-# 1605
+# 1739
 void keyPressed(void){
 while(PORTBbits.RB1 == 0){
 
